@@ -11,7 +11,11 @@ class Dependency():
 	template_rss = """<item><title>{TITLE}</title><link>{URL}</link><guid>{URL}</guid><description>{DESCRIPTION}</description><pubDate>{DATE}</pubDate></item>"""
 	def __init__ (self, pathname):
 		self.pathname = pathname
+		self.set_url()
 		self.mtime = os.stat(self.pathname).st_mtime
+	
+	def set_url (hostname="localhost"):
+		self.url = os.path.join(hostname, urllib.parse.quote(self.pathname)
 	
 	def parse (self):
 		with open(self.pathname, "r") as f:
@@ -24,17 +28,16 @@ class Dependency():
 		self.title = str(soup.select_one("main > h1").renderContents(), encoding="utf8")
 		self.contents = str(soup.main.renderContents(), encoding="utf8")
 	
-	def render (self, html=True, hostname=None):
-		URL=urllib.parse.quote(self.pathname)
-		if hostname: URL=os.path.join(hostname, URL)
-		if html: return self.template_html.format(
-			URL=URL,
+	def render_html (self):
+		return self.template_html.format(
+			URL=self.url,
 			TITLE=self.title,
 			DATE=self.date
 		)
-		else: return self.template_rss.format(
+	def render_rss (self):
+		return self.template_rss.format(
 			TITLE=self.title,
-			URL=URL,
+			URL=self.url,
 			DATE=self.date,
 			DESCRIPTION="<![CDATA["+self.contents+"]]>"
 		)
@@ -68,7 +71,7 @@ class Index(Target):
 		items = list()
 		keywords = set()
 		for dep in self.dependencies:
-			items.append(dep.render())
+			items.append(dep.render_html())
 			keywords.union(dep.keywords)
 		final = self.template.format(
 			ITEMS="".join(items),
@@ -91,12 +94,13 @@ class Feed(Target):
 		self.url = tmp["content"] if tmp else "localhost"
 		tmp = soup.find(attrs={"name":"description"})
 		self.description = tmp["content"] if tmp else "localhost"
+		for dep in self.dependencies: dep.set_url(self.url)
 
 	def render(self):
 		for dep in self.dependencies: dep.parse()
 		self.dependencies.sort(reverse=True, key=lambda dep: dep.date)
 		items = list()
-		for dep in self.dependencies[:10]: items.append(dep.render(html=False, hostname=self.url))
+		for dep in self.dependencies[:10]: items.append(dep.render_rss())
 		self.dependencies.sort(reverse=True, key=lambda dep: dep.date)
 		final = self.template.format(
 			ITEMS="".join(items),
