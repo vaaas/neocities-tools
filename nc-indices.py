@@ -26,8 +26,8 @@ class Dependency():
 	
 	def render (self, html=True, hostname=None):
 		URL=urllib.parse.quote(self.pathname)
-		if hostname: URL = os.path.join(hostname, URL)
-		if(html): return self.template_html.format(
+		if hostname: URL=os.path.join(hostname, URL)
+		if html: return self.template_html.format(
 			URL=URL,
 			TITLE=self.title,
 			DATE=self.date
@@ -65,7 +65,6 @@ class Index(Target):
 	def render(self):
 		for dep in self.dependencies: dep.parse()
 		self.dependencies.sort(reverse=True, key=lambda dep: dep.date)
-
 		items = list()
 		keywords = set()
 		for dep in self.dependencies:
@@ -117,8 +116,8 @@ def valid_page (page):
 	else: return True
 
 def main ():
-	files = filter(valid_page, os.listdir("."))
-	deps = [Dependency(f) for f in files]
+	deps = [Dependency(f) for f in os.listdir(".") if valid_page(f)]
+	if len(deps) == 0: sys.exit()
 	index = Index("index.html", deps)
 	feed = Feed("rss.xml", deps)
 	if index.needs_remake(): index.render()
