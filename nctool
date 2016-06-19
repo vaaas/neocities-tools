@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import stat
+import json
+import urllib.parse
+import sqlite3
+import requests
+from bs4 import BeautifulSoup
+
+dbname = ".db.sqlite3"
+templatename = ".template.html"
+
+def hidden(f): return f[0] == "."
+
+def post_contents(f):
+	with open(f, "r") as f:
+		contents = f.read()
+	soup = BeautifulSoup(contents, "html.parser")
+	return str(soup.main.renderContents(), encoding="utf8")
+
+class Post():
+	def __init__ (self, pathname):
+		self.pathname = pathname
+		self.set_url()
+		self.mtime = os.stat(self.pathname).st_mtime
+
+	def parse (self):
+		with open(self.pathname, "r") as f:
+			contents = f.read()
+		soup = BeautifulSoup(contents, "html.parser")
+		tmp = soup.find(attrs={"name":"keywords"})
+		self.keywords = set(tmp["content"].split(", ")) if tmp else set()
+		tmp = soup.find(attrs={"name":"date"})
+		self.date = tmp["content"] if tmp else "0000-00-00"
+		self.title = str(soup.select_one("main > h1").renderContents(), encoding="utf8")
+
+def sync():
+	def remote_files (rootdir, user, password):
+		r = requests.get("https://neocities.org/api/list", auth=(user, password))
+		if (r.status_code != 200): quit()
+		rjson = json.loads(r.text)
+		if (rjson["result"] != "success"): quit()
+		return {
+			os.path.join(rootdir, entry["path"]): {
+				"size": entry["size"] if not entry["is_directory"] else None
+			}
+			for entry in rjson["files"]
+		}
+
+	def local_files (rootdir):
+		localfiles = dict()
+		for root, dirs, files in os.walk(rootdir):
+			for f in files:
+				if hidden(f): continue
+				pathname = os.path.join(root, f)
+				stats = os.stat(pathname)
+				localfiles[pathname] = { "size": stats.st_size if not stat.S_ISDIR(stats.st_mode) else None }
+		return localfiles
+
+	def comparison (remote, local):
+		rset, lset = set(remote), set(local)
+		onlyremote = rset.difference(lset)
+		onlylocal = lset.difference(rset)
+		common = rset.intersection(lset)
+		for f in common:
+			if remote[f]["size"] != local[f]["size"]:
+				if (remote[f]["size"] == None) or (local[f]["size"] == None):
+					quit("%s remote and local file types differ." % f)
+				else: onlylocal.add(f)
+		return onlyremote, onlylocal
+
+	def remove_files (rmlist, rootdir, user, password):
+		paths = [os.path.relpath(path, rootdir) for path in rmlist]
+		r = requests.post(
+			"https://neocities.org/api/delete",
+			auth=(user, password), 
+			data={ "filenames[]": paths }
+		)
+		print(r.status_code)
+
+	def post_files (addlist, rootdir, user, password):
+		files = {os.path.relpath(path, rootdir):open(path, "r") for path in addlist}
+		r = requests.post(
+			"https://neocities.org/api/upload",
+			auth=(user, password),
+			files=files
+		)
+		print(r.status_code)
+	
+	def main():
+		rootdir = sys.argv[1] if len(sys.argv) == 2 and sys.argv[1] else "."
+		user, password = input("Username: "), input("Password: ")
+		rmlist, addlist = comparison(
+			remote_files(rootdir, user, password),
+			local_files(rootdir))
+		if not rmlist: print("No files to delete")
+		else: remove_files(rmlist, rootdir, user, password)
+		if not addlist: print("No files to upload")
+		else: post_files(addlist, rootdir, user, password)
+	
+	main()
+
+def render():
+	with open(templatename, "r") as f:
+		contents = f.read()
+	soup = BeautifulSoup(contents, "html.parser")
+	title = str(soup.title.renderContents(), "utf8")
+	tmp = soup.find(attrs={"name":"url"})
+	url = tmp["content"] if tmp else "localhost"
+	tmp = soup.find(attrs={"name":"description"})
+	description = tmp["content"] if tmp else "localhost"
+	del soup, tmp
+
+	def render_post_short(row):
+		template = """<article><div class="date">{DATE}</div><h1><a href="{URL}">{TITLE}</a></h1></article>"""
+		return template.format(
+			URL=row[0],
+			TITLE=row[1],
+			DATE=row[3]
+		)
+	def render_post_rss(row, hostname):
+		template = """<item><title>{TITLE}</title><link>{URL}</link><guid>{URL}</guid><description>{DESCRIPTION}</description><pubDate>{DATE}</pubDate></item>"""
+		url = os.path.join(hostname, urllib.parse.quote(row[0]))
+		return template.format(
+			TITLE=row[0],
+			URL=url,
+			DATE=row[3],
+			DESCRIPTION="<![CDATA["+row[4]+"]]>"
+		)
+	
+	def render_rss(items, url, title, description):
+		template = """<?xml version='1.0' encoding='UTF-8' ?><rss version="2.0"><channel><title>{TITLE}</title><link>{URL}</link><description>{DESCRIPTION}</description>{ITEMS}</channel></rss>"""
+		return template.format(
+			ITEMS="".join(items),
+			URL=url,
+			TITLE=title,
+			DESCRIPTION=description
+		)
+	
+	def render_index():
+		template = contents.replace("<main>", """<main class="index">\n{ITEMS}""")
+	
+	def render_archive(items, date, keywords):
+		template = contents.replace("<main>", """<main class="archive">\n{ITEMS}""")
+		return template.format(
+			ITEMS="".join(items),
+			DATE="date",
+			KEYWORDS=keywords
+		)
+	
+	def archive(rows):
+		items = []
+		keywords = set()
+		for row in rows:
+			items.append(render_post_short(row))
+			keywords = keywords.union(row[2])
+		with open("archive.html", "w") as f:
+			f.write(render_archive(items, rows[0][3], keywords))
+			print("Wrote", "archive.html")
+	
+	def rss(rows):
+		items = []
+		for row in rows: items.append(render_post_rss(row, url))
+		with open("rss.xml", "w") as f:
+			f.write(render_rss(items, url, title, description))
+			print("Wrote", "rss.xml")
+
+	c = sqlite3.connect(dbname)
+	rows = c.execute("SELECT * FROM posts ORDER BY pathname").fetchall()
+	archive(rows)
+	rows10 = [r + tuple(post_contents(r[0])) for r in rows[:10]]
+	rss(rows10)
+	#index(rows10)
+
+def init():
+	c = sqlite3.connect(dbname)
+	c.execute("""CREATE TABLE posts (pathname TEXT PRIMARY KEY, title TEXT, keywords TEXT, date TEXT)""")
+	data = os.listdir("posts")
+	data.sort()
+	data = [os.path.join("posts", f) for f in data if not hidden(f)]
+	for f in data:
+		f = Post(f)
+		f.parse()
+		f = (f.pathname, f.title, ", ".join(f.keywords), f.date)
+		c.execute("INSERT INTO posts VALUES (?,?,?,?)", f)
+	c.commit()
+
+def add(stuff):
+	c = sqlite3.connect(dbname)
+	for f in stuff:
+		f = Post(f)
+		f.parse()
+		f = (f.pathname, f.title, ", ".join(f.keywords), f.date)
+		c.execute("INSERT INTO posts VALUES (?,?,?,?)", f)
+	c.commit()
+
+def main(argv):
+	if len(argv) < 2: sys.exit(1)
+	elif argv[1] == "sync": sync()
+	elif argv[1] == "init": init()
+	elif argv[1] == "render": render()
+	elif argv[1] == "add": add(argv[2:])
+
+if __name__ == "__main__": main(sys.argv)
