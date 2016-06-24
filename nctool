@@ -106,7 +106,7 @@ def sync():
 def render():
 	tpl = Template()
 	def render_post_short(row):
-		template = """<article><div class="date">{DATE}</div><h1><a href="{URL}">{TITLE}</a></h1></article>"""
+		template = """<tr><td class="date">{DATE}</td><td><h1><a href="{URL}">{TITLE}</a></h1></td></tr>"""
 		return template.format(
 			URL=row[0],
 			TITLE=row[1],
@@ -149,7 +149,7 @@ def render():
 		)
 	
 	def render_archive(items, date, keywords):
-		template = tpl.contents.replace("<main>", """<main class="archive">\n{ITEMS}""")
+		template = tpl.contents.replace("<main>", """<main class="archive">\n<table>{ITEMS}</table>""")
 		return template.format(
 			ITEMS="".join(items),
 			DATE="date",
