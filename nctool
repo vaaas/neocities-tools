@@ -10,31 +10,36 @@ import requests
 from bs4 import BeautifulSoup
 
 dbname = ".db.sqlite3"
-templatename = ".template.html"
+rootdir = sys.argv[2] if len(sys.argv) >= 3 and sys.argv[2] else "."
+postsdir = os.path.join(rootdir, "posts")
 
 def hidden(f): return f[0] == "."
-
-def post_contents(f):
-	with open(f, "r") as f:
-		contents = f.read()
-	soup = BeautifulSoup(contents, "html.parser")
-	return str(soup.main.renderContents(), encoding="utf8")
 
 class Post():
 	def __init__ (self, pathname):
 		self.pathname = pathname
-		self.set_url()
 		self.mtime = os.stat(self.pathname).st_mtime
-
-	def parse (self):
 		with open(self.pathname, "r") as f:
 			contents = f.read()
 		soup = BeautifulSoup(contents, "html.parser")
 		tmp = soup.find(attrs={"name":"keywords"})
-		self.keywords = set(tmp["content"].split(", ")) if tmp else set()
+		self.keywords = set(tmp["content"].strip().split(", ")) if tmp else set()
 		tmp = soup.find(attrs={"name":"date"})
-		self.date = tmp["content"] if tmp else "0000-00-00"
-		self.title = str(soup.select_one("main > h1").renderContents(), encoding="utf8")
+		self.date = tmp["content"].strip() if tmp else "0000-00-00"
+		self.title = str(soup.select_one("main > h1").extract().renderContents(), encoding="utf8").strip()
+		self.contents = str(soup.main.renderContents(), encoding="utf8").strip()
+
+class Template():
+	def __init__ (self):
+		with open(os.path.join(rootdir, ".template.html"), "r") as f:
+			contents = f.read()
+		soup = BeautifulSoup(contents, "html.parser")
+		self.title = str(soup.title.renderContents(), "utf8").strip()
+		tmp = soup.find(attrs={"name":"url"})
+		self.url = tmp["content"].strip() if tmp else "localhost"
+		tmp = soup.find(attrs={"name":"description"})
+		self.description = tmp["content"].strip() if tmp else "localhost"
+		self.contents = contents.strip()
 
 def sync():
 	def remote_files (rootdir, user, password):
@@ -89,30 +94,17 @@ def sync():
 		)
 		print(r.status_code)
 	
-	def main():
-		rootdir = sys.argv[1] if len(sys.argv) == 2 and sys.argv[1] else "."
-		user, password = input("Username: "), input("Password: ")
-		rmlist, addlist = comparison(
-			remote_files(rootdir, user, password),
-			local_files(rootdir))
-		if not rmlist: print("No files to delete")
-		else: remove_files(rmlist, rootdir, user, password)
-		if not addlist: print("No files to upload")
-		else: post_files(addlist, rootdir, user, password)
-	
-	main()
+	user, password = input("Username: "), input("Password: ")
+	rmlist, addlist = comparison(
+		remote_files(rootdir, user, password),
+		local_files(rootdir))
+	if not rmlist: print("No files to delete")
+	else: remove_files(rmlist, rootdir, user, password)
+	if not addlist: print("No files to upload")
+	else: post_files(addlist, rootdir, user, password)
 
 def render():
-	with open(templatename, "r") as f:
-		contents = f.read()
-	soup = BeautifulSoup(contents, "html.parser")
-	title = str(soup.title.renderContents(), "utf8")
-	tmp = soup.find(attrs={"name":"url"})
-	url = tmp["content"] if tmp else "localhost"
-	tmp = soup.find(attrs={"name":"description"})
-	description = tmp["content"] if tmp else "localhost"
-	del soup, tmp
-
+	tpl = Template()
 	def render_post_short(row):
 		template = """<article><div class="date">{DATE}</div><h1><a href="{URL}">{TITLE}</a></h1></article>"""
 		return template.format(
@@ -120,30 +112,44 @@ def render():
 			TITLE=row[1],
 			DATE=row[3]
 		)
-	def render_post_rss(row, hostname):
-		template = """<item><title>{TITLE}</title><link>{URL}</link><guid>{URL}</guid><description>{DESCRIPTION}</description><pubDate>{DATE}</pubDate></item>"""
-		url = os.path.join(hostname, urllib.parse.quote(row[0]))
+	def render_post_long(row):
+		template = """<article><div class="date">{DATE}</div><h1><a href="{URL}">{TITLE}</a></h1>{CONTENTS}</article>"""
 		return template.format(
-			TITLE=row[0],
+			URL=row[0],
+			TITLE=row[1],
+			DATE=row[3],
+			CONTENTS=row[4]
+		)
+
+	def render_rss_item(row):
+		template = """<item><title>{TITLE}</title><link>{URL}</link><guid>{URL}</guid><description>{DESCRIPTION}</description><pubDate>{DATE}</pubDate></item>"""
+		url = os.path.join(tpl.url, urllib.parse.quote(row[0]))
+		return template.format(
+			TITLE=row[1],
 			URL=url,
 			DATE=row[3],
 			DESCRIPTION="<![CDATA["+row[4]+"]]>"
 		)
 	
-	def render_rss(items, url, title, description):
-		template = """<?xml version='1.0' encoding='UTF-8' ?><rss version="2.0"><channel><title>{TITLE}</title><link>{URL}</link><description>{DESCRIPTION}</description>{ITEMS}</channel></rss>"""
+	def render_rss_feed(items):
+		template = """<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0"><channel><title>{TITLE}</title><link>{URL}</link><description>{DESCRIPTION}</description>{ITEMS}</channel></rss>"""
 		return template.format(
 			ITEMS="".join(items),
-			URL=url,
-			TITLE=title,
-			DESCRIPTION=description
+			URL=tpl.url,
+			TITLE=tpl.title,
+			DESCRIPTION=tpl.description
 		)
 	
-	def render_index():
-		template = contents.replace("<main>", """<main class="index">\n{ITEMS}""")
+	def render_index(items, keywords):
+		template = tpl.contents.replace("<main>", """<main class="index">\n{ITEMS}""")
+		return template.format(
+			ITEMS="".join(items),
+			DATE="date",
+			KEYWORDS=keywords,
+		)
 	
 	def render_archive(items, date, keywords):
-		template = contents.replace("<main>", """<main class="archive">\n{ITEMS}""")
+		template = tpl.contents.replace("<main>", """<main class="archive">\n{ITEMS}""")
 		return template.format(
 			ITEMS="".join(items),
 			DATE="date",
@@ -151,49 +157,58 @@ def render():
 		)
 	
 	def archive(rows):
-		items = []
-		keywords = set()
-		for row in rows:
-			items.append(render_post_short(row))
-			keywords = keywords.union(row[2])
+		keywords = {row[2] for row in rows}
+		items = [render_post_short(row) for row in rows]
 		with open("archive.html", "w") as f:
 			f.write(render_archive(items, rows[0][3], keywords))
 			print("Wrote", "archive.html")
 	
 	def rss(rows):
-		items = []
-		for row in rows: items.append(render_post_rss(row, url))
+		items = [render_rss_item(row) for row in rows]
 		with open("rss.xml", "w") as f:
-			f.write(render_rss(items, url, title, description))
+			f.write(render_rss_feed(items))
 			print("Wrote", "rss.xml")
-
+	
+	def index(rows):
+		keywords = {row[2] for row in rows}
+		items = [render_post_long(row) for row in rows]
+		with open("index.html", "w") as f:
+			f.write(render_index(items, keywords))
+			print("Wrote", "index.html")
+	
 	c = sqlite3.connect(dbname)
-	rows = c.execute("SELECT * FROM posts ORDER BY pathname").fetchall()
+	rows = c.execute("SELECT * FROM posts ORDER BY date DESC").fetchall()
 	archive(rows)
-	rows10 = [r + tuple(post_contents(r[0])) for r in rows[:10]]
+	rows10 = [r + (Post(r[0]).contents,) for r in rows[:10]]
 	rss(rows10)
-	#index(rows10)
+	index(rows10)
 
 def init():
+	if os.path.isfile(dbname): os.remove(dbname)
 	c = sqlite3.connect(dbname)
 	c.execute("""CREATE TABLE posts (pathname TEXT PRIMARY KEY, title TEXT, keywords TEXT, date TEXT)""")
-	data = os.listdir("posts")
+	data = os.listdir(postsdir)
 	data.sort()
-	data = [os.path.join("posts", f) for f in data if not hidden(f)]
+	data = [os.path.join(postsdir, f) for f in data if not hidden(f)]
 	for f in data:
 		f = Post(f)
-		f.parse()
-		f = (f.pathname, f.title, ", ".join(f.keywords), f.date)
-		c.execute("INSERT INTO posts VALUES (?,?,?,?)", f)
+		c.execute(
+			"INSERT INTO posts VALUES (?,?,?,?)",
+			(f.pathname, f.title, ", ".join(f.keywords), f.date)
+		)
 	c.commit()
 
-def add(stuff):
+def add():
 	c = sqlite3.connect(dbname)
-	for f in stuff:
+	rows = set([row[0] for row in c.execute("SELECT pathname FROM posts")])
+	files = set([os.path.join(postsdir, f) for f in os.listdir(postsdir)])
+	for f in files.difference(rows):
 		f = Post(f)
-		f.parse()
-		f = (f.pathname, f.title, ", ".join(f.keywords), f.date)
-		c.execute("INSERT INTO posts VALUES (?,?,?,?)", f)
+		c.execute(
+			"INSERT INTO posts VALUES (?,?,?,?)",
+			(f.pathname, f.title, ", ".join(f.keywords), f.date)
+		)
+		print("Added", f.pathname)
 	c.commit()
 
 def main(argv):
@@ -201,6 +216,7 @@ def main(argv):
 	elif argv[1] == "sync": sync()
 	elif argv[1] == "init": init()
 	elif argv[1] == "render": render()
-	elif argv[1] == "add": add(argv[2:])
+	elif argv[1] == "add": add()
+	else: sys.exit(1)
 
 if __name__ == "__main__": main(sys.argv)
