@@ -150,7 +150,7 @@ def render():
 		return template.format(
 			ITEMS="".join(items),
 			DATE="date",
-			KEYWORDS=keywords,
+			KEYWORDS=", ".join(keywords)
 		)
 	
 	def render_archive(items, date, keywords):
@@ -158,7 +158,7 @@ def render():
 		return template.format(
 			ITEMS="".join(items),
 			DATE="date",
-			KEYWORDS=keywords
+			KEYWORDS=", ".join(keywords)
 		)
 	
 	def archive(rows):
