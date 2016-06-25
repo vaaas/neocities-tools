@@ -19,7 +19,7 @@ class Post():
 	def __init__ (self, pathname):
 		self.pathname = pathname
 		self.mtime = os.stat(self.pathname).st_mtime
-		with open(self.pathname, "r") as f:
+		with open(self.pathname, "r", encoding="UTF-8") as f:
 			contents = f.read()
 		soup = BeautifulSoup(contents, "html.parser")
 		tmp = soup.find(attrs={"name":"keywords"})
@@ -31,7 +31,7 @@ class Post():
 
 class Template():
 	def __init__ (self):
-		with open(os.path.join(rootdir, ".template.html"), "r") as f:
+		with open(os.path.join(rootdir, ".template.html"), "r", encoding="UTF-8") as f:
 			contents = f.read()
 		soup = BeautifulSoup(contents, "html.parser")
 		self.title = str(soup.title.renderContents(), "utf8").strip()
@@ -47,6 +47,7 @@ def sync():
 		if (r.status_code != 200): quit()
 		rjson = json.loads(r.text)
 		if (rjson["result"] != "success"): quit()
+		if (os.sep != "/"): for entry in rjson["files"]: entry["path"] = entry["path"].replace("/", os.sep)
 		return {
 			os.path.join(rootdir, entry["path"]): {
 				"size": entry["size"] if not entry["is_directory"] else None
@@ -78,6 +79,7 @@ def sync():
 
 	def remove_files (rmlist, rootdir, user, password):
 		paths = [os.path.relpath(path, rootdir) for path in rmlist]
+		if (os.sep != "/"): paths = [path.replace("/", os.sep) for path in paths]
 		r = requests.post(
 			"https://neocities.org/api/delete",
 			auth=(user, password), 
@@ -86,7 +88,7 @@ def sync():
 		print(r.status_code)
 
 	def post_files (addlist, rootdir, user, password):
-		files = {os.path.relpath(path, rootdir):open(path, "r") for path in addlist}
+		files = {os.path.relpath(path, rootdir):open(path, "r", encoding="UTF-8") for path in addlist}
 		r = requests.post(
 			"https://neocities.org/api/upload",
 			auth=(user, password),
@@ -159,20 +161,20 @@ def render():
 	def archive(rows):
 		keywords = {row[2] for row in rows}
 		items = [render_post_short(row) for row in rows]
-		with open("archive.html", "w") as f:
+		with open("archive.html", "w", encoding="UTF-8") as f:
 			f.write(render_archive(items, rows[0][3], keywords))
 			print("Wrote", "archive.html")
 	
 	def rss(rows):
 		items = [render_rss_item(row) for row in rows]
-		with open("rss.xml", "w") as f:
+		with open("rss.xml", "w", encoding="UTF-8") as f:
 			f.write(render_rss_feed(items))
 			print("Wrote", "rss.xml")
 	
 	def index(rows):
 		keywords = {row[2] for row in rows}
 		items = [render_post_long(row) for row in rows]
-		with open("index.html", "w") as f:
+		with open("index.html", "w", encoding="UTF-8") as f:
 			f.write(render_index(items, keywords))
 			print("Wrote", "index.html")
 	
