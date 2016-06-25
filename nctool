@@ -47,12 +47,12 @@ def sync():
 		if (r.status_code != 200): quit()
 		rjson = json.loads(r.text)
 		if (rjson["result"] != "success"): quit()
-		if (os.sep != "/"): for entry in rjson["files"]: entry["path"] = entry["path"].replace("/", os.sep)
+		if (os.sep != "/"):
+                        for entry in rjson["files"]:
+                                entry["path"] = entry["path"].replace("/", os.sep)
 		return {
-			os.path.join(rootdir, entry["path"]): {
-				"size": entry["size"] if not entry["is_directory"] else None
-			}
-			for entry in rjson["files"]
+			os.path.join(rootdir, entry["path"]): { "size": entry["size"] }
+			for entry in rjson["files"] if not entry["is_directory"]
 		}
 
 	def local_files (rootdir):
@@ -62,7 +62,7 @@ def sync():
 				if hidden(f): continue
 				pathname = os.path.join(root, f)
 				stats = os.stat(pathname)
-				localfiles[pathname] = { "size": stats.st_size if not stat.S_ISDIR(stats.st_mode) else None }
+				localfiles[pathname] = { "size": stats.st_size }
 		return localfiles
 
 	def comparison (remote, local):
@@ -79,7 +79,8 @@ def sync():
 
 	def remove_files (rmlist, rootdir, user, password):
 		paths = [os.path.relpath(path, rootdir) for path in rmlist]
-		if (os.sep != "/"): paths = [path.replace("/", os.sep) for path in paths]
+		print("Removing", " ".join(rmlist))
+		if (os.sep != "/"): paths = [path.replace(os.sep, "/") for path in paths]
 		r = requests.post(
 			"https://neocities.org/api/delete",
 			auth=(user, password), 
@@ -89,6 +90,8 @@ def sync():
 
 	def post_files (addlist, rootdir, user, password):
 		files = {os.path.relpath(path, rootdir):open(path, "r", encoding="UTF-8") for path in addlist}
+		if (os.sep != "/"): files = {k.replace(os.sep, "/"):files[k] for k in files}
+		print("Posting", " ".join(addlist))
 		r = requests.post(
 			"https://neocities.org/api/upload",
 			auth=(user, password),
