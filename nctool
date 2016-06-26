@@ -41,7 +41,7 @@ class Template():
 		self.description = tmp["content"].strip() if tmp else "localhost"
 		self.contents = contents.strip()
 
-def sync():
+def push():
 	def remote_files (rootdir, user, password):
 		r = requests.get("https://neocities.org/api/list", auth=(user, password))
 		if (r.status_code != 200): quit()
@@ -89,7 +89,7 @@ def sync():
 		print(r.status_code)
 
 	def post_files (addlist, rootdir, user, password):
-		files = {os.path.relpath(path, rootdir):open(path, "r", encoding="UTF-8") for path in addlist}
+		files = {os.path.relpath(path, rootdir):open(path, "rb") for path in addlist}
 		if (os.sep != "/"): files = {k.replace(os.sep, "/"):files[k] for k in files}
 		print("Posting", " ".join(addlist))
 		r = requests.post(
@@ -203,7 +203,7 @@ def init():
 		)
 	c.commit()
 
-def add():
+def commit():
 	c = sqlite3.connect(dbname)
 	rows = set([row[0] for row in c.execute("SELECT pathname FROM posts")])
 	files = set([os.path.join(postsdir, f) for f in os.listdir(postsdir)])
@@ -214,14 +214,17 @@ def add():
 			(f.pathname, f.title, ", ".join(f.keywords), f.date)
 		)
 		print("Added", f.pathname)
+	for r in rows.difference(files):
+		c.execute("DELETE FROM posts WHERE pathname=?", (r,))
+		print("Removed", r)
 	c.commit()
 
 def main(argv):
 	if len(argv) < 2: sys.exit(1)
-	elif argv[1] == "sync": sync()
+	elif argv[1] == "push": push()
 	elif argv[1] == "init": init()
 	elif argv[1] == "render": render()
-	elif argv[1] == "add": add()
+	elif argv[1] == "commit": commit()
 	else: sys.exit(1)
 
 if __name__ == "__main__": main(sys.argv)
