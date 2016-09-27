@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+import os
+import re
+import time
+
+def compactify (s):
+	return re.sub(r"\s+", " ", s).strip()
+
+def render_html_base(title, date, contents):
+	r = """<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<link rel="icon" href="/favicon.ico">
+	<link rel="stylesheet" href="/style.css">
+	<link rel="alternate" type="application/rss+xml" href="/rss.xml">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="url" content="https://vas.neocities.org/">
+	<meta name="author" content="Vas">
+	<meta name="description" content="A blog on technology, nerddom, and politics">
+	<meta name="date" content="%s">
+	<title>%s</title>
+</head>
+<body>
+<header>
+	<h1><a href="/">Vas' blog</a></h1>
+	<p>A blog on technology, nerddom, and politics <img class="emoji" src="/pics/eggplant.svg"></p>
+	<address><p>Make contact via <a href="mailto:whiterocket@outlook.com">email</a> or <a href="xmpp:vaas@xmpp.jp">XMPP</a></p></address>
+	<nav><p>
+		<a href="/rss.xml">Feed</a>
+		<a href="/archive.html">Archive</a>
+	</p></nav>
+</header>
+<main>%s</main>
+</body>
+</html>""" % (date, title, contents)
+	return compactify(r)
+
+def render_post(t):
+	d = t.deps[0]
+	contents = '<div class="date">%s</div><h1><a href="/%s">%s</a></h1>%s' % (d.pubdate, d.pathname, d.pubtitle, d.pubcontents)
+	return render_html_base(d.pubtitle, d.pubdate, contents)
+
+def render_index(t):
+	contents = []
+	for dep in t.deps:
+		contents.append('<article><div class="date">%s</div><h1><a href="%s">%s</a></h1>%s</article>' % (dep.pubdate, dep.pathname, dep.pubtitle, dep.pubcontents))
+	return render_html_base("Vas' blog", t.deps[0].pubdate, "".join(contents))
+
+def render_archive(t):
+	contents = ['<table class="archive">']
+	for dep in t.deps:
+		contents.append('<tr><td class="date">%s</td><td><h1><a href="%s">%s</a></h1></td></tr>' % (dep.pubdate, dep.pathname, dep.pubtitle))
+	contents.append("</table>")
+	return render_html_base("Archive | Vas' blog", t.deps[0].pubdate, "".join(contents))
+
+def render_rss(t):
+	entries = []
+	for dep in t.deps:
+		entries.append("""<item>
+<title>%s</title>
+<link>https://vas.neocities.org/%s</link>
+<guid>https://vas.neocities.org/%s</guid>
+<pubDate>%s</pubDate>
+<description><![CDATA[%s]]></description>
+</item>""" % (dep.pubtitle, dep.pathname, dep.pathname, dep.pubdate, dep.pubcontents))
+	content = """<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+<channel>
+<title>Vas' blog</title>
+<link>https://vas.neocities.org/</link>
+<description>A blog on technology, nerddom, and politics</description>
+<pubdate>%s</pubdate>
+<lastBuildDate>%s</lastBuildDate>
+<ttl>1440</ttl>
+%s
+</channel>
+</rss>""" % (t.deps[0].pubdate, time.strftime("%Y-%m-%d"), "".join(entries))
+	return compactify(content)
+
+class Target ():
+	def __init__ (self, pathname, deps, makecb):
+		self.pathname = pathname
+		self.date = os.stat(pathname).st_mtime if os.path.exists(pathname) else -1
+		self.deps = deps
+		self.cb = makecb
+	
+	def makep (self):
+		for d in self.deps:
+			if self.date < d.date: return True
+		return False
+	
+	def make (self):
+		for d in self.deps:
+			if not d.parsed: d.parse()
+		f = open(self.pathname, "w")
+		f.write(self.cb(self))
+		f.close()
+		print("Wrote", self.pathname)
+
+class Dependency ():
+	def __init__ (self, pathname):
+		self.pathname = pathname
+		self.date = os.stat(pathname).st_mtime
+		self.parsed = False
+	
+	def parse(self):
+		with open(self.pathname, "r") as f:
+			contents = f.read()
+		self.pubdate = re.search('<meta name="date" content="([0-9]{4}-[0-9]{2}-[0-9]{2})">', contents).group(1)
+		self.pubkeywords = re.search('<meta name="keywords" content="(.+)">', contents).group(1)
+		self.pubtitle = re.search('<h1>(.+)</h1>', contents).group(1)
+		self.pubcontents = re.search('</h1>(.+)</body>', contents, flags=re.DOTALL).group(1)
+		self.parsed = True
+
+posts = []
+for root, dirs, files in os.walk("posts"):
+	for f in files:
+		p = os.path.join(root, f)
+		posts.append(Dependency(p))
+posts.sort(key=lambda dep: dep.date)
+
+targets = [Target(os.path.join("render", d.pathname), [d], render_post) for d in posts]
+targets.append(Target(os.path.join("render", "index.html"), posts[:10], render_index))
+targets.append(Target(os.path.join("render", "archive.html"), posts, render_archive))
+targets.append(Target(os.path.join("render", "rss.xml"), posts[:10], render_rss))
+
+for target in targets:
+	if target.makep(): target.make()

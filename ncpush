@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+import sys
+import os
+import json
+import subprocess
+
+def exit (s):
+	print(s)
+	sys.exit(1)
+
+def remote (user, password):
+	argv = ["/usr/bin/curl", "https://%s:%s@neocities.org/api/list" % (user, password)]
+	j = subprocess.check_output(argv, universal_newlines=True)
+	j = json.loads(j)
+	if j["result"] != "success": exit("Getting remote files failed")
+	return { f["path"]: f["size"] for f in j["files"] if not f["is_directory"] }
+
+def local ():
+	r = dict()
+	for root, dirs, files in os.walk("."):
+		for f in files:
+			path = os.path.relpath(os.path.join(root, f), ".")
+			size = os.stat(path).st_size
+			r[path] = size
+	return r
+
+def diffs (remote, local):
+	rset = set(remote)
+	lset = set(local)
+	delete = rset.difference(lset)
+	add = lset.difference(rset)
+	for f in lset:
+		if remote[f] != local[f]: add.add(f)
+	return delete, add
+
+def delete (what):
+	print("Deleting", ", ".join(what))
+	argv = ["/usr/bin/curl"]
+	for f in what:
+		argv.append("-d")
+		argv.append("filenames[]=" + f)
+	argv.append("https://%s:%s@neocities.org/api/delete" % (user, password))
+	subprocess.call(argv, stdout=sys.stdout, stderr=sys.stderr)
+	print("Done")
+
+def upload (user, password, what):
+	print("Uploading", ", ".join(what))
+	argv = ["/usr/bin/curl"]
+	for f in what:
+		argv.append("-F")
+		argv.append("%s=@%s" % (f,f))
+	argv.append("https://%s:%s@neocities.org/api/upload" % (user, password))
+	subprocess.call(argv, stdout=sys.stdout, stderr=sys.stderr)
+	print("Done")
+
+def main ():
+	if (len(sys.argv) >= 2): os.chdir(sys.argv[1])
+	user = input("Username: ")
+	password = input("Password: ")
+	remove, add = diffs(remote(user, password), local())
+	if remove: delete(remove)
+	else: print("Nothing to delete")
+	if add: upload(user, password, add)
+	else: print("Nothing to upload")
+
+if __name__ == "__main__": main()

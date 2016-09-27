@@ -2,14 +2,10 @@
 
 Tools for easing management of a neocities site.
 
-Usage:
-
-- ```nctool init```: initialise/recreate database
-- ```nctool add```: automatically detect and add new posts to database
-- ```nctool render```: create rss.xml, index.html, and archive.html from database entries
-- ```nctool sync```: push local files to remote files
+Tools:
+- ```ncpush```: pushes the current directory (or the first argument) to neocities, recursively
+- ```ncrender```: a static blog generator. Reads from ```posts``` and outputs to ```render/posts```, and also generates ```render/{archive.html,index.html,rss.xml}. Edit the file to change the template.```
 
 Dependencies:
-- ```Beautiful Soup```
-- ```requests```
-- ```sqlite3```
+- ```python3```
+- ```curl```
