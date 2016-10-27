@@ -161,12 +161,6 @@ class Article (Dependency):
 		self.blurb = self.content.split("\n", 1)[0]
 		self.parsed = True
 
-	def makep (self):
-		tgt = os.path.join(target, self.pathname)
-		if not os.path.exist(tgt): return True
-		elif self.stamp > mtime(tgt): return True
-		else: return False
-
 	def serialise_short (self):
 		return '<article><div class="date">%s</div><h1><a href="/%s">%s</a></h1>%s</article>' % (self.pubdate, self.pathname, self.title, self.blurb)
 
