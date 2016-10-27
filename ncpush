@@ -29,11 +29,12 @@ def diffs (remote, local):
 	lset = set(local)
 	delete = rset.difference(lset)
 	add = lset.difference(rset)
-	for f in lset:
+	common = rset.intersection(lset)
+	for f in common:
 		if remote[f] != local[f]: add.add(f)
 	return delete, add
 
-def delete (what):
+def delete (what, user, password):
 	print("Deleting", ", ".join(what))
 	argv = ["/usr/bin/curl"]
 	for f in what:
@@ -58,7 +59,7 @@ def main ():
 	user = input("Username: ")
 	password = input("Password: ")
 	remove, add = diffs(remote(user, password), local())
-	if remove: delete(remove)
+	if remove: delete(remove, user, password)
 	else: print("Nothing to delete")
 	if add: upload(user, password, add)
 	else: print("Nothing to upload")
