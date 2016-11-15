@@ -73,7 +73,6 @@ class HTML_Target (Target):
 class Article_Target (HTML_Target):
 	def serialise(self):
 		templatestring = "%s%s"
-		for i in self.dependencies: i.parse()
 		d = self.dependencies[0]
 		return super(Article_Target, self).serialise(
 			d.pubdate,
@@ -83,7 +82,6 @@ class Article_Target (HTML_Target):
 class Articles_Index_Target (HTML_Target):
 	def serialise(self):
 		templatestring = "%s<main class=\"list\">%s</main>" 
-		for d in self.dependencies: d.parse()
 		items = [d.serialise_short() for d in self.dependencies]
 		return super(Articles_Index_Target, self).serialise(
 			self.dependencies[0].pubdate,
@@ -113,7 +111,6 @@ class Index_Target (HTML_Target):
 			<div class="list border-list">%s</div>
 		</section>
 		</main>""" 
-		for i in self.dependencies: i.parse()
 		items = [d.serialise_short() for d in self.dependencies]
 		return super(Index_Target, self).serialise(
 			self.dependencies[0].pubdate,
@@ -134,7 +131,6 @@ class RSS_Target (Target):
 		%s
 		</channel>
 		</rss>"""
-		for d in self.dependencies: d.parse()
 		items = [d.serialise_rss() for d in self.dependencies]
 		return compactify(templatestring % (SITENAME,
 			URL,
@@ -150,16 +146,11 @@ class Dependency:
 class Article (Dependency):
 	def __init__(self, pathname):
 		super(Article, self).__init__(pathname)
-		self.parsed = False
-
-	def parse(self):
-		if self.parsed: return
 		text = open(self.pathname, "r").read()
 		self.title = extract(text, "title")
 		self.content = extract(text, "body", True)
 		self.pubdate = extract(text, "pubdate")
 		self.blurb = self.content.split("\n", 1)[0]
-		self.parsed = True
 
 	def serialise_short (self):
 		return '<article><div class="date">%s</div><h1><a href="/%s">%s</a></h1>%s</article>' % (self.pubdate, self.pathname, self.title, self.blurb)
@@ -180,7 +171,7 @@ def main(target="render"):
 	for root, dirs, files in os.walk("articles"):
 		for f in files:
 			deps.append(Article(os.path.join(root, f)))
-	deps.sort(key=lambda x: x.mtime)
+	deps.sort(key=lambda x: x.pubdate, reverse=True)
 	targets = [Article_Target(os.path.join(target, dep.pathname), [dep]) for dep in deps]
 	targets.append(
 		Articles_Index_Target(
