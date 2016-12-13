@@ -13,8 +13,10 @@ def mtime(pathname): return os.stat(pathname).st_mtime
 def now(): return time.strftime('%a, %d %b %Y %H:%M:%S GMT')
 
 def rfc822(string):
-	t = time.strptime('%Y-%m-%d')
-	time.strftime('%a, %d %b %Y %H:%M:%S GMT', t)
+	return time.strftime(
+		'%a, %d %b %Y %H:%M:%S GMT',
+		time.strptime(string, '%Y-%m-%d')
+	)
 
 def compactify (s): return re.sub(r"\s+", " ", s).strip()
 
@@ -139,7 +141,7 @@ class RSS_Target (Target):
 		items = [d.serialise_rss() for d in self.dependencies]
 		return compactify(templatestring % (SITENAME,
 			URL,
-			self.dependencies[0].pubdate,
+			self.dependencies[0].rfcpubdate,
 			now(),
 			"".join(items)))
 
@@ -154,7 +156,8 @@ class Article (Dependency):
 		text = open(self.pathname, "r").read()
 		self.title = extract(text, "title")
 		self.content = extract(text, "body", True)
-		self.pubdate = rfc822(extract(text, "pubdate"))
+		self.pubdate = extract(text, "pubdate")
+		self.rfcpubdate = rfc822(self.pubdate)
 		self.blurb = self.content.split("\n", 1)[0]
 
 	def serialise_short (self):
@@ -169,7 +172,7 @@ class Article (Dependency):
 		<link>%s</link>
 		<guid>%s</guid>
 		<pubDate>%s</pubDate>
-		<description><![CDATA[%s]]></description></item>""" % (self.title, url, url, self.pubdate, self.content)
+		<description><![CDATA[%s]]></description></item>""" % (self.title, url, url, self.rfcpubdate, self.content)
 
 def main(target="render"):
 	deps = []
