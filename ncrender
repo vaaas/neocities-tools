@@ -10,7 +10,11 @@ URL = "https://vas.neocities.org"
 
 def mtime(pathname): return os.stat(pathname).st_mtime
 
-def now(): return time.strftime('%H:%M %d %b %Y')
+def now(): return time.strftime('%a, %d %b %Y %H:%M:%S GMT')
+
+def rfc822(string):
+	t = time.strptime('%Y-%m-%d')
+	time.strftime('%a, %d %b %Y %H:%M:%S GMT', t)
 
 def compactify (s): return re.sub(r"\s+", " ", s).strip()
 
@@ -125,8 +129,9 @@ class RSS_Target (Target):
 			<title>%s</title>
 			<link>%s</link>
 			<description>A blog on technology, nerddom, and politics</description>
-			<pubdate>%s</pubdate>
+			<pubDate>%s</pubDate>
 			<lastBuildDate>%s</lastBuildDate>
+			<language>en-gb</language>
 		<ttl>1440</ttl>
 		%s
 		</channel>
@@ -149,7 +154,7 @@ class Article (Dependency):
 		text = open(self.pathname, "r").read()
 		self.title = extract(text, "title")
 		self.content = extract(text, "body", True)
-		self.pubdate = extract(text, "pubdate")
+		self.pubdate = rfc822(extract(text, "pubdate"))
 		self.blurb = self.content.split("\n", 1)[0]
 
 	def serialise_short (self):
