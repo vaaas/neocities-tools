@@ -125,7 +125,7 @@ class Index_Target (HTML_Target):
 
 class RSS_Target (Target):
 	def serialise(self):
-		templatestring = """<?xml version="1.0" encoding="UTF-8" ?>
+		templatestring = """<?xml version="1.0" encoding="utf-8" ?>
 		<rss version="2.0">
 		<channel>
 			<title>%s</title>
