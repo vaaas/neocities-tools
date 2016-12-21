@@ -1,0 +1,28 @@
+#!/usr/bin/env make
+DIR = render
+ARTICLES = $(addprefix $(DIR)/,$(wildcard articles/*.html))
+NOTES = $(addprefix $(DIR)/,$(addsuffix .html,$(sort $(wildcard notes/*))))
+.PHONY: all dirs
+
+all: dirs $(DIR)/rss.xml $(DIR)/index.html $(DIR)/articles/index.html
+
+dirs:
+	mkdir -p $(DIR) $(DIR)/articles $(DIR)/notes
+
+$(DIR)/rss.xml: $(DIR)/index.html
+	./ncrender2 rss $^ > $@
+
+$(DIR)/index.html: $(DIR)/articles/index.html $(firstword $(NOTES))
+	./ncrender2 index $^ > $@
+
+$(DIR)/articles/index.html: $(ARTICLES)
+	./ncrender2 articleindex $(^:$(DIR)/%=%) > $@
+
+$(DIR)/articles/%: ./articles/%
+	./ncrender2 article $^ > $@
+
+$(DIR)/notes/index.html: $(NOTES)
+	./ncrender2 notesindex $(^:$(DIR)/%.html=%) > $@
+
+$(DIR)/notes/%.html: ./notes/%
+	./ncrender2 notes $^ > $@

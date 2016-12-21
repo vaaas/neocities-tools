@@ -4,9 +4,20 @@ import sys
 import os
 import re
 import time
+from ast import literal_eval
+import xml.etree.ElementTree as ET
 
-SITENAME = "Vas' Website"
-URL = "https://vas.neocities.org"
+CONF = {
+	"site": "Vas' Website",
+	"url": "https://vas.neocities.org"
+}
+
+CURRENT_YEAR = time.strftime("%Y")
+
+def get_text (e):
+	return ET.tostring(e, encoding="unicode")
+
+def render_map (ts, items): return map(lambda e: ts % e, items) 
 
 def mtime(pathname): return os.stat(pathname).st_mtime
 
@@ -15,186 +26,211 @@ def now(): return time.strftime('%a, %d %b %Y %H:%M:%S GMT')
 def rfc822(string):
 	return time.strftime(
 		'%a, %d %b %Y %H:%M:%S GMT',
-		time.strptime(string, '%Y-%m-%d')
-	)
+		time.strptime(string, '%Y-%m-%d'))
+
+def ymd(string):
+	return time.strftime(
+		'%Y-%m-%d',
+		time.strptime(string, '%a, %d %b %Y %H:%M:%S %z'))
 
 def compactify (s): return re.sub(r"\s+", " ", s).strip()
 
-def extract(text, elem, DOTALL=False):
-	string = '<%s>(.+)</%s>' % (elem, elem)
-	if DOTALL:
-		return re.search(string, text, flags=re.DOTALL).group(1).strip()
-	else:
-		return re.search(string, text).group(1).strip()
+def bigger (a, b): return a if a > b else b
 
-class Target:
-	def __init__ (self, pathname, dependencies):
-		self.mtime = mtime(pathname) if os.path.exists(pathname) else 0
-		self.dependencies = dependencies
-		self.pathname = pathname
+def full_url (partial): return os.path.join(CONF["url"], partial)
 
-	def makep (self):
-		for d in self.dependencies:
-			if d.mtime > self.mtime: return True
-		return False
+def HTML (date, title, content):
+	ts = """<!DOCTYPE html>
+	<html lang="en-gb">
+	<head>
+		<meta charset="utf-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<meta name="url" content="%s"/>
+		<meta name="author" content="Vas"/>
+		<meta name="description" content="A blog on technology, nerddom, nad politics"/>
+		<meta name="date" content="%s"/>
+		<link rel="stylesheet" href="/style.css"/>
+		<link rel="icon" href="/favicon.ico?v=2"/>
+		<link rel="alternate" type="application/rss+xml" href="/rss.xml"/>
+		<title>%s</title>
+	</head>
+	<body><img alt="website icon" id="icon" src="/pics/icon.png"/>%s</body>
+	</html>"""
+	return compactify(ts % (CONF["url"], date, title, content))
 
-	def newer(self):
-		return [d for d in self.dependencies if d.mtime > self.mtime]
+def location_header(pathname):
+	s = pathname.split("/")
+	if s[-1] == "index.html": s.pop()
+	p = "/"
+	s[0] = '<a href="/">%s</a>' % (CONF["site"],)
+	for i in range(1, len(s)):
+		p = os.path.join(p, s[i])
+		s[i] = '<a href="%s">%s</a>' % (p, s[i])
+	return '<nav class="inline-list" id="location">%s</nav>' % "/".join(s)
 
-	def make (self):
-		print("Creating", self.pathname)
-		open(self.pathname, "w").write(self.serialise())
-		print("Done")
+def article (pathname):
+	with open(pathname, "r") as f: tree = ET.fromstring(f.read())
+	title = tree.find("./title").text
+	content = get_text(tree.find("./body"))
+	pubdate = tree.find("./pubDate").text
+	return HTML(
+		pubdate,
+		"%s | %s" % (title, CONF["site"]),
+		'%s<div class="date">%s</div><h1><a href="/%s">%s</a></h1>%s' % (
+			location_header(pathname),
+			pubdate, pathname, title, content))
 
-class HTML_Target (Target):
-	def serialise (self, date, title, content):
-		templatestring = """<!DOCTYPE html>
-		<html>
-		<head>
-			<meta charset="utf-8">
-			<meta name="viewport" content="width=device-width, initial-scale=1.0">
-			<meta name="url" content="%s">
-			<meta name="author" content="Vas">
-			<meta name="description" content="A blog on technology, nerddom, nad politics">
-			<meta name="date" content="%s">
-			<link rel="stylesheet" href="/style.css">
-			<link rel="icon" href="/favicon.ico?v=2">
-			<link rel="alternate" type="application/rss+xml" href="/rss.xml">
-			<title>%s</title>
-		</head>
-		<body><img id="icon" src="/pics/icon.png">%s</body>
-		</html>"""
-		return compactify(templatestring % (URL, date, title, content))
+def notes (pathname):
+	ts = '<article id="%s"><span class="date">%s</span>%s</article>' 
+	with open(pathname, "r") as f: tree = ET.fromstring("<root>"+f.read()+"</root>")
+	lst = []
+	for e in tree.findall("./article"):
+		date = ymd(e.find("./date").text)
+		content = e.find("./post")
+		content.tag = "p"
+		content = get_text(content)
+		lst.append((date, content))
+	lst.sort(key=lambda e: e[0], reverse=True)
+	for i in range(len(lst)): lst[i] = (i,) + lst[i]
+	return HTML(
+		lst[0][0],
+		"Notes %s | %s" % (os.path.basename(pathname), CONF["site"]),
+		'%s<main class="border-list">%s</main>' % (
+			location_header(pathname),
+			"".join(render_map(ts, lst))))
 
-	def location_header(self):
-		s = self.pathname.split("/")
-		if s[-1] == "index.html": s.pop()
-		p = "/"
-		s[0] = '<a href="/">%s</a>' % (SITENAME)
-		for i in range(1, len(s)):
-			p = os.path.join(p, s[i])
-			s[i] = '<a href="%s">%s</a>' % (p, s[i])
-		return '<nav class="inline-list" id="location">%s</nav>' % "/".join(s)
+def index (aindex, nindex):
+	ts = """<main class="list">
+	<section id="about">
+		<h1>%s</h1>
+		<p>A blog on technology, nerddom, and politics.</p>
+	</section>
 
-class Article_Target (HTML_Target):
-	def serialise(self):
-		templatestring = "%s%s"
-		d = self.dependencies[0]
-		return super(Article_Target, self).serialise(
-			d.pubdate,
-			"%s | %s" % (d.title, SITENAME),
-			templatestring % (self.location_header(), d.serialise_long()))
+	<section id="links">
+		<h1>Links</h1>
+		<p class="inline-list">
+			<a href="/rss.xml">RSS feed</a>
+			<a href="mailto:whiterocket@outlook.com">Email</a>
+			<a href="xmpp:vaas@xmpp.jp">XMPP</a>
+			<a href="https://github.com/vaaas">GitHub</a>
+		</p>
+	</section>
 
-class Articles_Index_Target (HTML_Target):
-	def serialise(self):
-		templatestring = "%s<main class=\"list\">%s</main>" 
-		items = [d.serialise_short() for d in self.dependencies]
-		return super(Articles_Index_Target, self).serialise(
-			self.dependencies[0].pubdate,
-			"Articles | %s" % (SITENAME),
-			templatestring % (self.location_header(), "".join(items)))
+	<section id="notes">
+		<h1><a href="/notes/">Notes</a></h1>
+		<div class="list border-list">%s</div>
+	</section>
 
-class Index_Target (HTML_Target):
-	def serialise(self):
-		templatestring = """<main class="list">
-		<section id="about">
-			<h1>%s</h1>
-			<p>A blog on technology, nerddom, and politics.</p>
-		</section>
+	<section id="articles">
+		<h1><a href="/articles/">Articles</a></h1>
+		<div class="list border-list">%s</div>
+	</section>
+	</main>""" 
 
-		<section id="links">
-			<h1>Links</h1>
-			<p class="inline-list">
-				<a href="/rss.xml">RSS feed</a>
-				<a href="mailto:whiterocket@outlook.com">Email</a>
-				<a href="xmpp:vaas@xmpp.jp">XMPP</a>
-				<a href="https://github.com/vaaas">GitHub</a>
-			</p>
-		</section>
+	with open(aindex, "r") as f: tree = ET.fromstring(f.read())
+	articles = map(
+		get_text,
+		tree.findall("./body/main/article")[:10])
+	artd = tree.find('./head/meta[@name="date"]').attrib["content"]
 
-		<section id="articles">
-			<h1><a href="/articles">Articles</a></h1>
-			<div class="list border-list">%s</div>
-		</section>
-		</main>""" 
-		items = [d.serialise_short() for d in self.dependencies]
-		return super(Index_Target, self).serialise(
-			self.dependencies[0].pubdate,
-			SITENAME,
-			templatestring % (SITENAME, "".join(items)))
+	with open(nindex, "r") as f: tree = ET.fromstring(f.read())
+	notes = map(
+		get_text,
+		tree.findall("./body/main/article")[:10])
+	noted = tree.find('./head/meta[@name="date"]').attrib["content"]
 
-class RSS_Target (Target):
-	def serialise(self):
-		templatestring = """<?xml version="1.0" encoding="utf-8" ?>
-		<rss version="2.0">
-		<channel>
-			<title>%s</title>
-			<link>%s</link>
-			<description>A blog on technology, nerddom, and politics</description>
-			<pubDate>%s</pubDate>
-			<lastBuildDate>%s</lastBuildDate>
-			<language>en-gb</language>
-		<ttl>1440</ttl>
-		%s
-		</channel>
-		</rss>"""
-		items = [d.serialise_rss() for d in self.dependencies]
-		return compactify(templatestring % (SITENAME,
-			URL,
-			self.dependencies[0].rfcpubdate,
-			now(),
-			"".join(items)))
+	return HTML(
+		bigger(artd, noted),
+		CONF["site"],
+		ts % (
+			CONF["site"],
+			"".join(notes),
+			"".join(articles)))
 
-class Dependency:
-	def __init__ (self, pathname):
-		self.mtime = mtime(pathname)
-		self.pathname = pathname
-
-class Article (Dependency):
-	def __init__(self, pathname):
-		super(Article, self).__init__(pathname)
-		text = open(self.pathname, "r").read()
-		self.title = extract(text, "title")
-		self.content = extract(text, "body", True)
-		self.pubdate = extract(text, "pubdate")
-		self.rfcpubdate = rfc822(self.pubdate)
-		self.blurb = self.content.split("\n", 1)[0]
-
-	def serialise_short (self):
-		return '<article><div class="date">%s</div><h1><a href="/%s">%s</a></h1>%s</article>' % (self.pubdate, self.pathname, self.title, self.blurb)
-
-	def serialise_long (self):
-		return '<div class="date">%s</div><h1><a href="/%s">%s</a></h1>%s' % (self.pubdate, self.pathname, self.title, self.content)
-
-	def serialise_rss (self):
-		url = os.path.join(URL, self.pathname)
-		return """<item><title>%s</title>
+def rss (index):
+	# TODO
+	tsi = """<item><title>%s</title><link>%s</link><guid>%s</guid><pubDate>%s</pubDate><description>%s</description></item>""" 
+	ts = """<?xml version="1.0" encoding="utf-8" ?>
+	<rss version="2.0">
+	<channel>
+		<title>%s</title>
 		<link>%s</link>
-		<guid>%s</guid>
+		<description>A blog on technology, nerddom, and politics</description>
 		<pubDate>%s</pubDate>
-		<description><![CDATA[%s]]></description></item>""" % (self.title, url, url, self.rfcpubdate, self.content)
+		<lastBuildDate>%s</lastBuildDate>
+		<language>en-gb</language>
+	<ttl>1440</ttl>
+	%s
+	</channel>
+	</rss>"""
+	def parse_article (e):
+		date = rfc822(e.find('./*[@class="date"]').text)
+		title = e.find("./h1/a").text
+		href = full_url(e.find("./h1/a").attrib["href"])
+		content = get_text(e.find("./p")) + '<p><a href="%s">Read more</a></p>' % (href,)
+		return (title, href, href, date, content)
+	
+	def parse_notes (e):
+		date = e.find('./*[@class="date"]').text
+		content = get_text(e.find("./p"))
+		title = "%s note" % (date,)
+		href = full_url("/notes/%s.html#%s" % (CURRENT_YEAR, e.attrib["id"]))
+		return (title, href, href, date, content)
+	
+	with open(index, "r") as f: tree = ET.fromstring(f.read())
+	lst = []
+	for i in tree.findall("./body/main/section[@id='articles']//article"):
+		lst.append(parse_article(i))
+	for i in tree.findall("./body/main/section[@id='notes']//article"):
+		lst.append(parse_notes(i))
+	lst.sort(key=lambda e: e[3], reverse=True)
 
-def main(target="render"):
-	deps = []
-	for root, dirs, files in os.walk("articles"):
-		for f in files:
-			deps.append(Article(os.path.join(root, f)))
-	deps.sort(key=lambda x: x.pubdate, reverse=True)
-	targets = [Article_Target(os.path.join(target, dep.pathname), [dep]) for dep in deps]
-	targets.append(
-		Articles_Index_Target(
-			os.path.join(target, "articles", "index.html"),
-			deps[:]))
-	targets.append(
-		RSS_Target(
-			os.path.join(target, "rss.xml"),
-			deps[:10]))
-	targets.append(
-		Index_Target(
-			os.path.join(target, "index.html"),
-			deps[:10]))
-	for target in targets:
-		if target.makep(): target.make()
-	print("All done")
+	return compactify(ts % (CONF["site"],
+		CONF["url"],
+		lst[0][3],
+		now(),
+		"".join(render_map(tsi, lst))))
 
-if __name__ == "__main__": main(*sys.argv[1:])
+def articleindex (pathnames):
+	ts = '<article><div class="date">%s</div><h1><a href="/%s">%s</a></h1>%s</article>' 
+	lst = []
+	for p in pathnames:
+		with open(p, "r") as f: tree = ET.fromstring(f.read())
+		title = tree.find("./title").text
+		pubdate = tree.find("./pubDate").text
+		blurb = get_text(tree.find("./body/p[1]"))
+		lst.append((pubdate, p, title, blurb))
+	lst.sort(key=lambda x: x[0], reverse=True)
+	return (HTML(
+		lst[0][0],
+		"Articles | %s" % (CONF["site"],),
+		'%s<main class="list">%s</main>' % (
+			location_header("/articles"),
+			"".join(render_map(ts, lst)))))
+
+def notesindex (pathnames):
+	ts = '<section><h1><a href="/%s.html">%s</a></h1><p>In %s, there were %s notes</p></section>'
+	lst = []
+	for p in pathnames:
+		with open(p, "r") as f: tree = ET.fromstring("<root>"+f.read()+"</root>")
+		n = len(tree.findall("./article"))
+		date = os.path.basename(p)
+		lst.append((p, "%s Notes" % (date,), date, n))
+	return HTML(
+		now(),
+		"Notes | %s" % (CONF["site"],),
+		'%s<main class="list">%s</main>' % (
+			location_header("/notes"),
+			"".join(render_map(ts, lst))))
+
+def main (fn, args):
+	if fn == "article": print(article(*args))
+	elif fn == "notes": print(notes(*args))
+	elif fn == "index": print(index(args[0], args[1]))
+	elif fn == "rss": print(rss(*args))
+	elif fn == "articleindex": print(articleindex(args))
+	elif fn == "notesindex": print(notesindex(args))
+	else: return 1
+
+if __name__ == "__main__":
+	main(sys.argv[1], sys.argv[2:])
