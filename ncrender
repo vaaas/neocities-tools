@@ -21,17 +21,17 @@ def render_map (ts, items): return map(lambda e: ts % e, items)
 
 def mtime(pathname): return os.stat(pathname).st_mtime
 
-def now(): return time.strftime('%a, %d %b %Y %H:%M:%S GMT')
+def now(): return time.strftime('%a, %d %b %Y %H:%M:%S +0000')
 
-def rfc822(string):
+def stamp_to_rfc822(string):
 	return time.strftime(
-		'%a, %d %b %Y %H:%M:%S GMT',
-		time.strptime(string, '%Y-%m-%d'))
+		'%a, %d %b %Y %H:%M:%S +0000',
+		time.gmtime(int(string)))
 
-def ymd(string):
+def stamp_to_ymd(string):
 	return time.strftime(
 		'%Y-%m-%d',
-		time.strptime(string, '%a, %d %b %Y %H:%M:%S %z'))
+		time.gmtime(int(string)))
 
 def compactify (s): return re.sub(r"\s+", " ", s).strip()
 
@@ -74,26 +74,26 @@ def article (pathname):
 	content = get_text(tree.find("./body"))
 	pubdate = tree.find("./pubDate").text
 	return HTML(
-		pubdate,
+		stamp_to_rfc822(pubdate),
 		"%s | %s" % (title, CONF["site"]),
-		'%s<div class="date">%s</div><h1><a href="/%s">%s</a></h1>%s' % (
+		'%s<data class="date" value="%s">%s</data><h1><a href="/%s">%s</a></h1>%s' % (
 			location_header(pathname),
-			pubdate, pathname, title, content))
+			pubdate, stamp_to_ymd(pubdate), pathname, title, content))
 
 def notes (pathname):
-	ts = '<article id="%s"><span class="date">%s</span>%s</article>' 
+	ts = '<article id="%s"><data class="date" value="%s">%s</data>%s</article>' 
 	with open(pathname, "r") as f: tree = ET.fromstring("<root>"+f.read()+"</root>")
 	lst = []
 	for e in tree.findall("./article"):
-		date = ymd(e.find("./date").text)
+		date = e.find("./date").text
 		content = e.find("./post")
 		content.tag = "p"
 		content = get_text(content)
-		lst.append((date, content))
-	lst.sort(key=lambda e: e[0], reverse=True)
+		lst.append((date, stamp_to_ymd(date), content))
+	lst.sort(key=lambda e: e[1], reverse=True)
 	for i in range(len(lst)): lst[i] = (i,) + lst[i]
 	return HTML(
-		lst[0][0],
+		stamp_to_rfc822(lst[0][1]),
 		"Notes %s | %s" % (os.path.basename(pathname), CONF["site"]),
 		'%s<main class="border-list">%s</main>' % (
 			location_header(pathname),
@@ -148,7 +148,6 @@ def index (aindex, nindex):
 			"".join(articles)))
 
 def rss (index):
-	# TODO
 	tsi = """<item><title>%s</title><link>%s</link><guid>%s</guid><pubDate>%s</pubDate><description>%s</description></item>""" 
 	ts = """<?xml version="1.0" encoding="utf-8" ?>
 	<rss version="2.0">
@@ -164,14 +163,14 @@ def rss (index):
 	</channel>
 	</rss>"""
 	def parse_article (e):
-		date = rfc822(e.find('./*[@class="date"]').text)
+		date = e.find('./*[@class="date"]').attrib["value"]
 		title = e.find("./h1/a").text
 		href = full_url(e.find("./h1/a").attrib["href"])
 		content = get_text(e.find("./p")) + '<p><a href="%s">Read more</a></p>' % (href,)
 		return (title, href, href, date, content)
 	
 	def parse_notes (e):
-		date = e.find('./*[@class="date"]').text
+		date = e.find('./*[@class="date"]').attrib["value"]
 		content = get_text(e.find("./p"))
 		title = "%s note" % (date,)
 		href = full_url("/notes/%s.html#%s" % (CURRENT_YEAR, e.attrib["id"]))
@@ -192,17 +191,17 @@ def rss (index):
 		"".join(render_map(tsi, lst))))
 
 def articleindex (pathnames):
-	ts = '<article><div class="date">%s</div><h1><a href="/%s">%s</a></h1>%s</article>' 
+	ts = '<article><data class="date" value="%s">%s</data><h1><a href="/%s">%s</a></h1>%s</article>' 
 	lst = []
 	for p in pathnames:
 		with open(p, "r") as f: tree = ET.fromstring(f.read())
 		title = tree.find("./title").text
 		pubdate = tree.find("./pubDate").text
 		blurb = get_text(tree.find("./body/p[1]"))
-		lst.append((pubdate, p, title, blurb))
+		lst.append((pubdate, stamp_to_ymd(pubdate), p, title, blurb))
 	lst.sort(key=lambda x: x[0], reverse=True)
 	return (HTML(
-		lst[0][0],
+		stamp_to_rfc822(lst[0][0]),
 		"Articles | %s" % (CONF["site"],),
 		'%s<main class="list">%s</main>' % (
 			location_header("/articles"),

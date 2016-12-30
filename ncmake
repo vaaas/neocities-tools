@@ -1,4 +1,4 @@
-#!/usr/bin/env make
+#!/usr/bin/make -f
 DIR = render
 ARTICLES = $(addprefix $(DIR)/,$(wildcard articles/*.html))
 NOTES = $(addprefix $(DIR)/,$(addsuffix .html,$(sort $(wildcard notes/*))))
@@ -10,19 +10,19 @@ dirs:
 	mkdir -p $(DIR) $(DIR)/articles $(DIR)/notes
 
 $(DIR)/rss.xml: $(DIR)/index.html
-	./ncrender2 rss $^ > $@
+	./ncrender rss $^ > $@
 
 $(DIR)/index.html: $(DIR)/articles/index.html $(firstword $(NOTES))
-	./ncrender2 index $^ > $@
+	./ncrender index $^ > $@
 
 $(DIR)/articles/index.html: $(ARTICLES)
-	./ncrender2 articleindex $(^:$(DIR)/%=%) > $@
+	./ncrender articleindex $(^:$(DIR)/%=%) > $@
 
 $(DIR)/articles/%: ./articles/%
-	./ncrender2 article $^ > $@
+	./ncrender article $^ > $@
 
 $(DIR)/notes/index.html: $(NOTES)
-	./ncrender2 notesindex $(^:$(DIR)/%.html=%) > $@
+	./ncrender notesindex $(^:$(DIR)/%.html=%) > $@
 
 $(DIR)/notes/%.html: ./notes/%
-	./ncrender2 notes $^ > $@
+	./ncrender notes $^ > $@
