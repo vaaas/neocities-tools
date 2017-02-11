@@ -8,6 +8,8 @@ def exit (s):
 	print(s)
 	sys.exit(1)
 
+def yes_p (s): return s.lower() in ["y", "ye", "yes", "yeah", "yup"]
+
 def remote (user, password):
 	argv = ["/usr/bin/curl", "https://%s:%s@neocities.org/api/list" % (user, password)]
 	j = subprocess.check_output(argv, universal_newlines=True)
@@ -36,6 +38,7 @@ def diffs (remote, local):
 
 def delete (what, user, password):
 	print("Deleting", ", ".join(what))
+	if not yes_p(input("Proceed? [y/n] > ")): return
 	argv = ["/usr/bin/curl"]
 	for f in what:
 		argv.append("-d")
@@ -46,6 +49,7 @@ def delete (what, user, password):
 
 def upload (user, password, what):
 	print("Uploading", ", ".join(what))
+	if not yes_p(input("Proceed? [y/n] > ")): return
 	argv = ["/usr/bin/curl"]
 	for f in what:
 		argv.append("-F")

@@ -1,28 +1,24 @@
 #!/usr/bin/make -f
-DIR = render
-ARTICLES = $(addprefix $(DIR)/,$(wildcard articles/*.html))
-NOTES = $(addprefix $(DIR)/,$(addsuffix .html,$(sort $(wildcard notes/*))))
-.PHONY: all dirs
+TARGET = render
+DIRS = $(shell find ./ -maxdepth 1 -xtype d -not -name "render" -not -name "."| cut -c 3-)
+TGTDIRS = $(addprefix $(TARGET)/,$(DIRS))
+TGTFILES = $(addprefix $(TARGET)/,$(wildcard $(DIRS)/*.html))
+INDICES = $(addsuffix /index.html,$(TGTDIRS))
+.PHONY: all dirs test
 
-all: dirs $(DIR)/rss.xml $(DIR)/index.html $(DIR)/articles/index.html
+all: dirs $(TARGET)/index.html $(TARGET)/rss.xml $(TGTFILES)
 
 dirs:
-	mkdir -p $(DIR) $(DIR)/articles $(DIR)/notes
+	mkdir -p $(TARGET) $(TGTDIRS)
 
-$(DIR)/rss.xml: $(DIR)/index.html
+$(TARGET)/index.html: $(INDICES)
+	./ncrender compile $^ > $@
+
+%/rss.xml: %/index.html
 	./ncrender rss $^ > $@
 
-$(DIR)/index.html: $(DIR)/articles/index.html $(firstword $(NOTES))
+$(TARGET)/%/index.html: %/*.html
 	./ncrender index $^ > $@
 
-$(DIR)/articles/index.html: $(ARTICLES)
-	./ncrender articleindex $(^:$(DIR)/%=%) > $@
-
-$(DIR)/articles/%: ./articles/%
-	./ncrender article $^ > $@
-
-$(DIR)/notes/index.html: $(NOTES)
-	./ncrender notesindex $(^:$(DIR)/%.html=%) > $@
-
-$(DIR)/notes/%.html: ./notes/%
-	./ncrender notes $^ > $@
+$(TARGET)/%.html: %.html
+	./ncrender item $^ > $@
