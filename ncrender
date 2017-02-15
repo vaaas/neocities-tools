@@ -64,7 +64,8 @@ def location_header(pathname):
 def item (pathname):
 	with open(pathname, "r") as f: tree = ET.fromstring(f.read())
 	title = tree.find("./head/title").text
-	content = get_text(tree.find("./body"))
+	body = tree.find("./body")
+	content = get_text(body)
 	pubdate = tree.find("./head/meta[@name='timestamp']").attrib["value"]
 	return HTML(
 		stamp_to_rfc822(pubdate),

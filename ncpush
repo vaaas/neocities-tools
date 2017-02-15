@@ -37,35 +37,37 @@ def diffs (remote, local):
 	return delete, add
 
 def delete (what, user, password):
-	print("Deleting", ", ".join(what))
-	if not yes_p(input("Proceed? [y/n] > ")): return
 	argv = ["/usr/bin/curl"]
 	for f in what:
 		argv.append("-d")
 		argv.append("filenames[]=" + f)
 	argv.append("https://%s:%s@neocities.org/api/delete" % (user, password))
 	subprocess.call(argv, stdout=sys.stdout, stderr=sys.stderr)
-	print("Done")
 
-def upload (user, password, what):
-	print("Uploading", ", ".join(what))
-	if not yes_p(input("Proceed? [y/n] > ")): return
+def upload (what, user, password):
 	argv = ["/usr/bin/curl"]
 	for f in what:
 		argv.append("-F")
 		argv.append("%s=@%s" % (f,f))
 	argv.append("https://%s:%s@neocities.org/api/upload" % (user, password))
 	subprocess.call(argv, stdout=sys.stdout, stderr=sys.stderr)
-	print("Done")
 
 def main ():
 	if (len(sys.argv) >= 2): os.chdir(sys.argv[1])
 	user = input("Username: ")
 	password = input("Password: ")
 	remove, add = diffs(remote(user, password), local())
-	if remove: delete(remove, user, password)
+	if remove:
+		print("Deleting", ", ".join(remove))
+		if yes_p(input("Proceed? [y/n] > ")):
+			delete(remove, user, password)
+			print("Done")
 	else: print("Nothing to delete")
-	if add: upload(user, password, add)
+	if add:
+		print("Uploading", ", ".join(add))
+		if yes_p(input("Proceed? [y/n] > ")):
+			upload(add, user, password)
+			print("Done")
 	else: print("Nothing to upload")
 
 if __name__ == "__main__": main()
