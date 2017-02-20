@@ -1,24 +1,18 @@
 #!/usr/bin/make -f
 TARGET = render
-DIRS = $(shell find ./ -maxdepth 1 -xtype d -not -name "render" -not -name "."| cut -c 3-)
-TGTDIRS = $(addprefix $(TARGET)/,$(DIRS))
-TGTFILES = $(addprefix $(TARGET)/,$(wildcard $(DIRS)/*.html))
-INDICES = $(addsuffix /index.html,$(TGTDIRS))
-.PHONY: all dirs test
+ARTICLES = $(addprefix $(TARGET)/,$(wildcard articles/*.html))
+.PHONY: all
 
-all: dirs $(TARGET)/index.html $(TARGET)/rss.xml $(TGTFILES)
+all: $(TARGET)/articles $(TARGET)/index.html $(TARGET)/rss.xml $(ARTICLES)
 
-dirs:
-	mkdir -p $(TARGET) $(TGTDIRS)
+$(TARGET)/articles:
+	mkdir -p $(TARGET)/articles
 
-$(TARGET)/index.html: $(INDICES)
-	./ncrender compile $^ > $@
+$(TARGET)/index.html: articles/*.html
+	./ncrender index $^ > $@
 
 %/rss.xml: %/index.html
 	./ncrender rss $^ > $@
 
-$(TARGET)/%/index.html: %/*.html
-	./ncrender index $^ > $@
-
-$(TARGET)/%.html: %.html
+$(TARGET)/articles/%.html: articles/%.html
 	./ncrender item $^ > $@

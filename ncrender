@@ -4,20 +4,22 @@ import sys
 import os
 import re
 import time
-from ast import literal_eval
 import xml.etree.ElementTree as ET
 
 CONF = {
 	"site": "Vas' Website",
-	"url": "https://vas.neocities.org"
-}
+	"desc": "A blog on technology, nerddom, and politics",
+	"url": "https://vas.neocities.org" }
 
-def get_text (e): return ET.tostring(e, encoding="unicode") 
-def mtime(pathname): return os.stat(pathname).st_mtime
 def now(): return time.strftime('%a, %d %b %Y %H:%M:%S +0000')
-def compactify (s): return re.sub(r"\s+", " ", s).strip()
 def full_url (partial): return CONF["url"] + partial if partial[0] is "/" else CONF["url"] + "/" + partial
 def parent_dir (path): return os.path.basename(os.path.dirname(path))
+
+def E (tag, attrs={}, children=[], text=""):
+	elem = ET.Element(tag, attrs)
+	for child in children: elem.append(child)
+	if len(text) > 0: elem.text = text
+	return elem
 
 def stamp_to_rfc822(string):
 	return time.strftime(
@@ -30,156 +32,100 @@ def stamp_to_ymd(string):
 		time.gmtime(int(string)))
 
 def HTML (date, title, content):
-	ts = """<!DOCTYPE html>
-	<html lang="en-gb">
-	<head>
-		<meta charset="utf-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-		<meta name="url" content="%s"/>
-		<meta name="author" content="Vas"/>
-		<meta name="description" content="A blog on technology, nerddom, nad politics"/>
-		<meta name="date" content="%s"/>
-		<link rel="stylesheet" href="/style.css"/>
-		<link rel="icon" href="/favicon.ico?v=2"/>
-		<link rel="alternate" type="application/rss+xml" href="/rss.xml"/>
-		<title>%s</title>
-	</head>
-	<body><img alt="website icon" id="icon" src="/pics/icon.png"/>%s</body>
-	</html>"""
-	return compactify(ts % (CONF["url"], date, title, content))
-
-def location_header(pathname):
-	s = pathname.split("/")
-	lst = []
-	lst.append('<a href="/">%s</a>' % (CONF["site"],))
-	p = "/"
-	for i in range(len(s)-1):
-		p = os.path.join(p, s[i])
-		lst.append('<a href="%s/">%s</a>' % (p, s[i]))
-	if s[-1] != "index.html":
-		p = os.path.join(p, s[-1])
-		lst.append('<a href="%s">%s</a>' % (p, s[-1]))
-	return '<nav class="inline-list" id="location">%s</nav>' % "/".join(lst)
+	if not content.tag is "body": content.tag = "body"
+	content.insert(0, E("img", {"alt": "website icon", "id": "icon", "src": "/pics/icon.png"}))
+	tree = E("html", {"lang": "en-gb"}, [
+		E("head", {}, [
+			E("meta", {"charset": "utf-8"}),
+			E("meta", {"name": "viewport", "content": "width=device-width, initial-scale=1.0"}),
+			E("meta", {"name": "url", "content": CONF["url"]}),
+			E("meta", {"name": "author", "content": "Vas"}),
+			E("meta", {"name": "description", "content": CONF["desc"]}),
+			E("meta", {"name": "date", "content": date}),
+			E("link", {"rel": "stylesheet", "href": "/style.css"}),
+			E("link", {"rel": "icon", "href": "/favicon.ico?v=2"}),
+			E("link", {"rel": "alternate", "href": "/rss.xml", "type": "application/rss+xml"}),
+			E("title", text=title) ]),
+		content ])
+	return "<!DOCTYPE html>" + ET.tostring(tree, encoding="unicode")
 
 def item (pathname):
 	with open(pathname, "r") as f: tree = ET.fromstring(f.read())
-	title = tree.find("./head/title").text
+	title = tree.find("./head/title")
+	title.tag = "h1"
 	body = tree.find("./body")
-	content = get_text(body)
-	pubdate = tree.find("./head/meta[@name='timestamp']").attrib["value"]
+	pubdate = tree.find("./head/meta[@name='timestamp']")
+	pubdate.tag = "data"
+	pubdate.attrib["class"] = "date"
+	pubdate.text = stamp_to_ymd(pubdate.attrib["value"])
+	body.insert(0, pubdate)
+	body.insert(0, title)
 	return HTML(
-		stamp_to_rfc822(pubdate),
-		"%s | %s" % (title, CONF["site"]),
-		'%s<data class="date" value="%s">%s</data><h1><a href="/%s">%s</a></h1>%s' % (
-			location_header(pathname),
-			pubdate, stamp_to_ymd(pubdate), pathname, title, content))
+		stamp_to_rfc822(pubdate.attrib["value"]),
+		title.text,
+		body)
 
-def compile_indices (indices):
-	ts = """<main class="list">
-	<section id="about">
-		<h1>%s</h1>
-		<p>A blog on technology, nerddom, and politics.</p>
-	</section>
+def index (articles):
+	def sum_article (article):
+		with open(article, "r") as f: tree = ET.fromstring(f.read())
+		timestamp = tree.find("./head/meta[@name='timestamp']").attrib["value"]
+		title = tree.find("./head/title").text
+		firstp = tree.find("./body/p[1]")
+		return E("article", {}, [
+			E("data", { "class": "date", "value": timestamp}, text=stamp_to_ymd(timestamp)),
+			E("h1", {}, [ E("a", { "href": article }, text=title) ]),
+			firstp ])
 
-	<section id="links">
-		<h1>Links</h1>
-		<p class="inline-list">
-			<a href="/rss.xml">RSS feed</a>
-			<a href="mailto:whiterocket@outlook.com">Email</a>
-			<a href="xmpp:vaas@xmpp.jp">XMPP</a>
-			<a href="https://github.com/vaaas">GitHub</a>
-		</p>
-	</section>
-	%s
-	</main>"""
-	tsi = """<section id="%s">
-		<h1><a href="/%s/">%s</a></h1>
-		<div class="list border-list">%s</div>
-		</section>"""
+	lst = [sum_article(article) for article in articles]
+	lst.sort(key=lambda x: x.find("./data").attrib["value"], reverse=True)
 
-	def extract_articles(index):
-		with open(index, "r") as f: tree = ET.fromstring(f.read())
-		return [get_text(a) for a in tree.findall(".//article")][:10]
-
-	sections = {parent_dir(index):extract_articles(index) for index in indices}
-
-	return HTML(
-		now(),
-		CONF["site"],
-		ts % (
-			CONF["site"],
-			"".join(map(
-				lambda k: tsi % (k, k, k.title(), "".join(sections[k])),
-				sections))))
+	tree = E("body", { "class": "list" }, [
+		E("section", { "id": "about" }, [
+			E("h1", text=CONF["site"]),
+			E("p", text=CONF["desc"])
+		]),
+		E("section", { "id": "links"}, [
+			E("h1", text="Links"),
+			E("p", { "class": "inline-list"}, [
+				E("a", { "href": "/rss.xml"}, text="RSS feed"),
+				E("a", { "href": "mailto:whiterocket@outlook.com"}, text="Email"),
+				E("a", { "href": "xmpp:vaas@xmpp.jp"}, text="XMPP"),
+				E("a", { "href": "https://github.com/vaaas"}, text="GitHub") ])]),
+		E("div", { "class": "border-list" }, lst)])
+	return HTML(now(), CONF["site"], tree)
 
 def rss (index):
-	tsi = """<item><title>%s</title><link>%s</link><guid>%s</guid><pubDate>%s</pubDate><description><![CDATA[%s]]></description></item>""" 
-	ts = """<?xml version="1.0" encoding="utf-8" ?>
-	<rss version="2.0">
-	<channel>
-		<title>%s</title>
-		<link>%s</link>
-		<description>A blog on technology, nerddom, and politics</description>
-		<pubDate>%s</pubDate>
-		<lastBuildDate>%s</lastBuildDate>
-		<language>en-gb</language>
-	<ttl>1440</ttl>
-	%s </channel> </rss>"""
+	def article_to_item (a):
+		link = a.find("./h1/a")
+		pathname = full_url(link.attrib["href"])
+		timestamp = a.find('./data[@class="date"]').attrib["value"]
+		pubdate = stamp_to_rfc822(timestamp)
+		blurb = """<![CDATA[%s<p><a href="%s">Read more</a></p>]]>""" % (ET.tostring(a.find("./p"), encoding="unicode"), pathname)
+		return E("item", {}, [
+			E("title", text=link.text),
+			E("link", text=pathname),
+			E("guid", text=pathname),
+			E("pubDate", text=pubdate),
+			E("description", text=blurb) ])
 
-	class Article:
-		def __init__(self, tree):
-			self.title = tree.find("./h1/a").text
-			self.timestamp = tree.find('./*[@class="date"]').attrib["value"]
-			self.pubdate = stamp_to_rfc822(self.timestamp)
-			self.pathname = full_url(tree.find("./h1/a").attrib["href"])
-			self.blurb = get_text(tree.find("./p")) + '<p><a href="%s">Read more</a></p>' % (self.pathname,)
-		def render (self):
-			return tsi % (self.title, self.pathname, self.pathname, self.pubdate, self.blurb)
+	with open(index, "r") as f: itree = ET.fromstring(f.read())
+	items = [article_to_item(a) for a in itree.iterfind(".//article")]
+	tree = E("rss", {"version": "2.0"}, [
+		E("channel", {}, [
+			E("title", text=CONF["site"]),
+			E("link", text=CONF["url"]),
+			E("description", text=CONF["desc"]),
+			E("pubDate", text=items[0].find("./pubDate").text),
+			E("lastBuildDate", text=now()),
+			E("language", text="en-gb"),
+			E("ttl", text="1440")] + items)])
 
-	with open(index, "r") as f: tree = ET.fromstring(f.read())
-	lst = []
-	for section in tree.iterfind(".//section"):
-		for article in section.iterfind(".//article"):
-			lst.append(Article(article))
-	lst.sort(key=lambda e: e.timestamp, reverse=True)
-
-	return compactify(ts % (CONF["site"],
-		CONF["url"],
-		lst[0].pubdate,
-		now(),
-		"".join(map(lambda e: e.render(), lst))))
-
-def index (files):
-	ts = '%s <main id="%s" class="list">%s</main>'
-	tsi = '<article><data class="date" value="%s">%s</data><h1><a href="/%s">%s</a></h1>%s</article>' 
-	section = parent_dir(files[0])
-
-	class Article:
-		def __init__(self, pathname):
-			with open(pathname, "r") as f: tree = ET.fromstring(f.read())
-			self.title = tree.find("./head/title").text
-			self.pubdate = tree.find("./head/meta[@name='timestamp']").attrib["value"]
-			self.blurb = get_text(tree.find("./body/p[1]"))
-			self.pathname = pathname
-		def render (self):
-			return tsi % (self.pubdate, stamp_to_ymd(self.pubdate), self.pathname, self.title, self.blurb)
-
-	lst = [Article(p) for p in files]
-	lst.sort(key=lambda x: x.pubdate, reverse=True)
-
-	return (HTML(
-		now(),
-		"%s | %s" % (section.title(), CONF["site"],),
-		ts % (
-			location_header(section + "/index.html"),
-			section,
-			"".join(map(lambda e: e.render(), lst)))))
+	return """<?xml version="1.0" encoding="utf-8" ?>""" + ET.tostring(tree, encoding="unicode")
 
 def main (fn, args):
-	if fn == "item": print(item(args[0]))
-	elif fn == "compile": print(compile_indices(args))
-	elif fn == "index": print(index(args))
-	elif fn == "rss": print(rss(args[0]))
+	if fn == "item": sys.stdout.write(item(args[0]))
+	elif fn == "index": sys.stdout.write(index(args))
+	elif fn == "rss": sys.stdout.write(rss(args[0]))
 	else: return 1
 
 if __name__ == "__main__":
