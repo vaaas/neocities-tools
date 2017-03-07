@@ -4,7 +4,7 @@ import sys
 import os
 import re
 import time
-import xml.etree.ElementTree as ET
+import lxml.etree as ET
 
 CONF = {
 	"site": "Vas' Website",
@@ -14,11 +14,15 @@ CONF = {
 def now(): return time.strftime('%a, %d %b %Y %H:%M:%S +0000')
 def full_url (partial): return CONF["url"] + partial if partial[0] is "/" else CONF["url"] + "/" + partial
 def parent_dir (path): return os.path.basename(os.path.dirname(path))
+def stdout (s): sys.stdout.write(compactify(s))
+def compactify (s):
+	s = re.sub(r"\s+", " ", s, flags=re.MULTILINE)
+	return s
 
 def E (tag, attrs={}, children=[], text=""):
 	elem = ET.Element(tag, attrs)
 	for child in children: elem.append(child)
-	if len(text) > 0: elem.text = text
+	if (text): elem.text = text
 	return elem
 
 def stamp_to_rfc822(string):
@@ -33,7 +37,6 @@ def stamp_to_ymd(string):
 
 def HTML (date, title, content):
 	if not content.tag is "body": content.tag = "body"
-	content.insert(0, E("img", {"alt": "website icon", "id": "icon", "src": "/pics/icon.png"}))
 	tree = E("html", {"lang": "en-gb"}, [
 		E("head", {}, [
 			E("meta", {"charset": "utf-8"}),
@@ -58,8 +61,11 @@ def item (pathname):
 	pubdate.tag = "data"
 	pubdate.attrib["class"] = "date"
 	pubdate.text = stamp_to_ymd(pubdate.attrib["value"])
-	body.insert(0, pubdate)
+	header = E("header", {}, [
+		E("a", {"href": "/"}, text="Home")])
 	body.insert(0, title)
+	body.insert(0, pubdate)
+	body.insert(0, header)
 	return HTML(
 		stamp_to_rfc822(pubdate.attrib["value"]),
 		title.text,
@@ -72,26 +78,25 @@ def index (articles):
 		title = tree.find("./head/title").text
 		firstp = tree.find("./body/p[1]")
 		return E("article", {}, [
-			E("data", { "class": "date", "value": timestamp}, text=stamp_to_ymd(timestamp)),
+			E("data", {"class": "date", "value": timestamp}, text=stamp_to_ymd(timestamp)),
 			E("h1", {}, [ E("a", { "href": article }, text=title) ]),
 			firstp ])
 
 	lst = [sum_article(article) for article in articles]
 	lst.sort(key=lambda x: x.find("./data").attrib["value"], reverse=True)
 
-	tree = E("body", { "class": "list" }, [
-		E("section", { "id": "about" }, [
-			E("h1", text=CONF["site"]),
-			E("p", text=CONF["desc"])
-		]),
-		E("section", { "id": "links"}, [
-			E("h1", text="Links"),
-			E("p", { "class": "inline-list"}, [
+	tree = E("body", {}, [
+		E("header", {}, [
+			E("div", {}, [
+				E("img", {"alt": "website icon", "id": "icon", "src": "/pics/icon.png"}),
+				E("h1", {}, text=CONF["site"])]),
+			E("p", text=CONF["desc"]),
+			E("nav", {}, [
 				E("a", { "href": "/rss.xml"}, text="RSS feed"),
 				E("a", { "href": "mailto:whiterocket@outlook.com"}, text="Email"),
 				E("a", { "href": "xmpp:vaas@xmpp.jp"}, text="XMPP"),
-				E("a", { "href": "https://github.com/vaaas"}, text="GitHub") ])]),
-		E("div", { "class": "border-list" }, lst)])
+				E("a", { "href": "https://github.com/vaaas"}, text="GitHub")])]),
+		] + lst)
 	return HTML(now(), CONF["site"], tree)
 
 def rss (index):
@@ -100,13 +105,13 @@ def rss (index):
 		pathname = full_url(link.attrib["href"])
 		timestamp = a.find('./data[@class="date"]').attrib["value"]
 		pubdate = stamp_to_rfc822(timestamp)
-		blurb = """<![CDATA[%s<p><a href="%s">Read more</a></p>]]>""" % (ET.tostring(a.find("./p"), encoding="unicode"), pathname)
+		blurb = ET.CDATA("""%s<p><a href="%s">Read more</a></p>""" % (ET.tostring(a.find("./p[1]"), encoding="unicode"), pathname))
 		return E("item", {}, [
 			E("title", text=link.text),
 			E("link", text=pathname),
 			E("guid", text=pathname),
 			E("pubDate", text=pubdate),
-			E("description", text=blurb) ])
+			E("description", text=blurb)])
 
 	with open(index, "r") as f: itree = ET.fromstring(f.read())
 	items = [article_to_item(a) for a in itree.iterfind(".//article")]
@@ -123,9 +128,9 @@ def rss (index):
 	return """<?xml version="1.0" encoding="utf-8" ?>""" + ET.tostring(tree, encoding="unicode")
 
 def main (fn, args):
-	if fn == "item": sys.stdout.write(item(args[0]))
-	elif fn == "index": sys.stdout.write(index(args))
-	elif fn == "rss": sys.stdout.write(rss(args[0]))
+	if fn == "item": stdout(item(args[0]))
+	elif fn == "index": stdout(index(args))
+	elif fn == "rss": stdout(rss(args[0]))
 	else: return 1
 
 if __name__ == "__main__":
