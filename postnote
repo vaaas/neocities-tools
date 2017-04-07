@@ -1,3 +1,33 @@
-#!/bin/sh
+#!/usr/bin/env python3
 
-echo "<article><date>$(date '+%s')</date><post>$@</post></article>" >> notes/$(date '+%Y')
+import time
+import os
+import sys
+import lxml.etree as ET
+
+timestamp = int(time.time())
+now = time.gmtime(timestamp)
+current_year = time.strftime("%Y", now)
+
+def E (tag, attrs={}, children=[], text=""):
+	elem = ET.Element(tag, attrs)
+	for child in children: elem.append(child)
+	if (text): elem.text = text
+	return elem
+
+tree = E("html",
+	children=[
+		E("head", children=[
+			E("meta", attrs={"name": "timestamp", "value": str(timestamp)})]),
+		E("body", children=[
+			E("p", text=" ".join(sys.argv[1:]))])])
+
+tgtdir = os.path.join("posts", current_year)
+tgtfile = os.path.join(tgtdir, str(timestamp) + ".html")
+
+if not os.path.isdir(os.path.join("posts", current_year)):
+	os.mkdir(os.path.join("posts", current_year))
+
+with open(tgtfile, "w") as f:
+	f.write("<!DOCTYPE html>")
+	f.write(ET.tostring(tree, encoding="unicode"))

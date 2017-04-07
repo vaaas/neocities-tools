@@ -1,18 +1,19 @@
 #!/usr/bin/make -f
-TARGET = render
-ARTICLES = $(addprefix $(TARGET)/,$(wildcard articles/*.html))
+
 .PHONY: all
 
-all: $(TARGET)/articles $(TARGET)/index.html $(TARGET)/rss.xml $(ARTICLES)
+TARGET = render
 
-$(TARGET)/articles:
-	mkdir -p $(TARGET)/articles
+ARTICLES := $(wildcard posts/*/*.html)
+ARTICLES := $(basename $(ARTICLES))
 
-$(TARGET)/index.html: articles/*.html
+all: $(TARGET)/index.html $(TARGET)/rss.xml
+
+$(TARGET)/index.html: posts/*.html
 	./ncrender index $^ > $@
 
 %/rss.xml: %/index.html
 	./ncrender rss $^ > $@
 
-$(TARGET)/articles/%.html: articles/%.html
+$(TARGET)/%.html: posts/%.html
 	./ncrender item $^ > $@

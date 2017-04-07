@@ -13,8 +13,34 @@ CONF = {
 
 def now(): return time.strftime('%a, %d %b %Y %H:%M:%S +0000')
 def full_url (partial): return CONF["url"] + partial if partial[0] is "/" else CONF["url"] + "/" + partial
-def parent_dir (path): return os.path.basename(os.path.dirname(path))
-def stdout (s): sys.stdout.write(compactify(s))
+
+def write(path, what):
+	with open(path, "w") as f:
+		f.write(compactify(what))
+
+def dirtree (start):
+	tree = {}
+	for entry in os.listdir(start):
+		pathname = os.path.join(start, entry)
+		tree[entry] = os.listdir(pathname) if os.path.isdir(pathname) else None
+	return tree
+
+class Target:
+	def __init__ (self, pathname, reqs, fn):
+		self.pathname = pathname
+		self.reqs = reqs
+		self.fn = fn
+	
+	def make(self):
+		print(self.pathname, ":", " ".join(self.reqs))
+		self.fn(self.pathname, self.reqs)
+
+	def makep (self):
+		own = os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1
+		others = [os.path.getmtime(req) for req in self.reqs]
+		others.sort()
+		if own < others[-1]: self.make()
+
 def compactify (s):
 	s = re.sub(r"\s+", " ", s, flags=re.MULTILINE)
 	return s
@@ -52,7 +78,8 @@ def HTML (date, title, content):
 		content ])
 	return "<!DOCTYPE html>" + ET.tostring(tree, encoding="unicode")
 
-def item (pathname):
+def item (target, reqs):
+	pathname = reqs[0]
 	with open(pathname, "r") as f: tree = ET.fromstring(f.read())
 	title = tree.find("./head/title")
 	title.tag = "h1"
@@ -66,12 +93,21 @@ def item (pathname):
 	body.insert(0, title)
 	body.insert(0, pubdate)
 	body.insert(0, header)
-	return HTML(
+	return write(target, HTML(
 		stamp_to_rfc822(pubdate.attrib["value"]),
 		title.text,
-		body)
+		body))
 
-def index (articles):
+def index (target, articles):
+	def yearnav ():
+		lst = []
+		years = os.listdir(os.path.join("posts"))
+		years.sort(reverse=True)
+		for year in years:
+			lst.append(E("a", { "href": "/" + year + ".html"}, text=year))
+		lst[0].attrib["href"] = "/"
+		return lst
+
 	def sum_article (article):
 		with open(article, "r") as f: tree = ET.fromstring(f.read())
 		timestamp = tree.find("./head/meta[@name='timestamp']").attrib["value"]
@@ -79,27 +115,29 @@ def index (articles):
 		firstp = tree.find("./body/p[1]")
 		return E("article", {}, [
 			E("data", {"class": "date", "value": timestamp}, text=stamp_to_ymd(timestamp)),
-			E("h1", {}, [ E("a", { "href": article }, text=title) ]),
+			E("h1", {}, [ E("a", { "href": os.path.basename(article) }, text=title) ]),
 			firstp ])
 
 	lst = [sum_article(article) for article in articles]
 	lst.sort(key=lambda x: x.find("./data").attrib["value"], reverse=True)
 
-	tree = E("body", {}, [
-		E("header", {}, [
-			E("div", {}, [
-				E("img", {"alt": "website icon", "id": "icon", "src": "/pics/icon.png"}),
-				E("h1", {}, text=CONF["site"])]),
-			E("p", text=CONF["desc"]),
-			E("nav", {}, [
-				E("a", { "href": "/rss.xml"}, text="RSS feed"),
-				E("a", { "href": "mailto:whiterocket@outlook.com"}, text="Email"),
-				E("a", { "href": "xmpp:vaas@xmpp.jp"}, text="XMPP"),
-				E("a", { "href": "https://github.com/vaaas"}, text="GitHub")])]),
-		] + lst)
-	return HTML(now(), CONF["site"], tree)
+	header = E("header", {}, [
+		E("div", {}, [
+			E("img", {"alt": "website icon", "id": "icon", "src": "/pics/icon.png"}),
+			E("h1", {}, text=CONF["site"])]),
+		E("p", text=CONF["desc"]),
+		E("nav", {}, [
+			E("a", { "href": "/rss.xml"}, text="RSS feed"),
+			E("a", { "href": "mailto:whiterocket@outlook.com"}, text="Email"),
+			E("a", { "href": "xmpp:vaas@xmpp.jp"}, text="XMPP"),
+			E("a", { "href": "https://github.com/vaaas"}, text="GitHub")]),
+		E("nav", {}, yearnav()) ])
 
-def rss (index):
+	tree = E("body", {}, [header] + lst)
+	return write(target, HTML(now(), CONF["site"], tree))
+
+def rss (target, reqs):
+	index = reqs[0]
 	def article_to_item (a):
 		link = a.find("./h1/a")
 		pathname = full_url(link.attrib["href"])
@@ -125,13 +163,48 @@ def rss (index):
 			E("language", text="en-gb"),
 			E("ttl", text="1440")] + items)])
 
-	return """<?xml version="1.0" encoding="utf-8" ?>""" + ET.tostring(tree, encoding="unicode")
+	return write(target, """<?xml version="1.0" encoding="utf-8" ?>""" + ET.tostring(tree, encoding="unicode"))
 
-def main (fn, args):
-	if fn == "item": stdout(item(args[0]))
-	elif fn == "index": stdout(index(args))
-	elif fn == "rss": stdout(rss(args[0]))
-	else: return 1
+def move (target, reqs):
+	os.rename(reqs[0], target)
+
+def main (args):
+	FORCE = True if len(args) > 0 and args[0] == "-f" else False
+
+	source = "posts"
+	target = "render"
+
+	tree = dirtree(source)
+	years = list(tree)
+	years.sort()
+
+	tgts = []
+
+	for year in tree:
+		tgts.append(Target(
+			os.path.join(target, year + ".html"),
+			[os.path.join(source, year, i) for i in tree[year]],
+			index))
+		for i in tree[year]:
+			tgts.append(Target(
+				os.path.join(target, i),
+				[os.path.join(source, year, i)],
+				item))
+
+	tgts.append(
+		Target(
+			os.path.join(target, "index.html"),
+			[os.path.join(target, years[-1]+".html")],
+			move))
+	tgts.append(
+		Target(
+			os.path.join(target, "rss.xml"),
+			[os.path.join(target, "index.html")],
+			rss))
+
+	for tgt in tgts:
+		if FORCE or tgt.makep():
+			tgt.make()
 
 if __name__ == "__main__":
-	main(sys.argv[1], sys.argv[2:])
+	main(sys.argv[1:])
