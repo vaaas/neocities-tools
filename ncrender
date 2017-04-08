@@ -89,9 +89,9 @@ def item (target, reqs):
 	pubdate.attrib["class"] = "date"
 	pubdate.text = stamp_to_ymd(pubdate.attrib["value"])
 	header = E("header", {}, [
-		E("a", {"href": "/"}, text="Home")])
+		E("a", {"href": "/"}, text=CONF["site"]),
+		pubdate])
 	body.insert(0, title)
-	body.insert(0, pubdate)
 	body.insert(0, header)
 	return write(target, HTML(
 		stamp_to_rfc822(pubdate.attrib["value"]),
@@ -99,27 +99,20 @@ def item (target, reqs):
 		body))
 
 def index (target, articles):
-	def yearnav ():
-		lst = []
-		years = os.listdir(os.path.join("posts"))
-		years.sort(reverse=True)
-		for year in years:
-			lst.append(E("a", { "href": "/" + year + ".html"}, text=year))
-		lst[0].attrib["href"] = "/"
-		return lst
-
 	def sum_article (article):
 		with open(article, "r") as f: tree = ET.fromstring(f.read())
 		timestamp = tree.find("./head/meta[@name='timestamp']").attrib["value"]
 		title = tree.find("./head/title").text
-		firstp = tree.find("./body/p[1]")
-		return E("article", {}, [
-			E("data", {"class": "date", "value": timestamp}, text=stamp_to_ymd(timestamp)),
-			E("h1", {}, [ E("a", { "href": os.path.basename(article) }, text=title) ]),
-			firstp ])
+		return E("article", {"data-post-type": "article"}, children=[
+			E("header", children=[
+				E("span", text="📄 Article "),
+				E("data", {"class": "date", "value": timestamp}, text=stamp_to_ymd(timestamp))]),
+			E("h1", children=[
+				E("a", { "href": os.path.basename(article) }, text=title)]),
+			tree.find("./body/p[1]")])
 
 	lst = [sum_article(article) for article in articles]
-	lst.sort(key=lambda x: x.find("./data").attrib["value"], reverse=True)
+	lst.sort(key=lambda x: x.find(".//data").attrib["value"], reverse=True)
 
 	header = E("header", {}, [
 		E("div", {}, [
@@ -130,20 +123,19 @@ def index (target, articles):
 			E("a", { "href": "/rss.xml"}, text="RSS feed"),
 			E("a", { "href": "mailto:whiterocket@outlook.com"}, text="Email"),
 			E("a", { "href": "xmpp:vaas@xmpp.jp"}, text="XMPP"),
-			E("a", { "href": "https://github.com/vaaas"}, text="GitHub")]),
-		E("nav", {}, yearnav()) ])
+			E("a", { "href": "https://github.com/vaaas"}, text="GitHub")])])
 
-	tree = E("body", {}, [header] + lst)
+	tree = E("body", {"class": "index"}, [header] + lst)
 	return write(target, HTML(now(), CONF["site"], tree))
 
 def rss (target, reqs):
 	index = reqs[0]
 	def article_to_item (a):
-		link = a.find("./h1/a")
+		link = a.find(".//a[1]")
 		pathname = full_url(link.attrib["href"])
-		timestamp = a.find('./data[@class="date"]').attrib["value"]
+		timestamp = a.find('.//data[@class="date"]').attrib["value"]
 		pubdate = stamp_to_rfc822(timestamp)
-		blurb = ET.CDATA("""%s<p><a href="%s">Read more</a></p>""" % (ET.tostring(a.find("./p[1]"), encoding="unicode"), pathname))
+		blurb = ET.CDATA("""%s<p><a href="%s">Read more</a></p>""" % (ET.tostring(a.find("./p"), encoding="unicode"), pathname))
 		return E("item", {}, [
 			E("title", text=link.text),
 			E("link", text=pathname),
@@ -174,28 +166,20 @@ def main (args):
 	source = "posts"
 	target = "render"
 
-	tree = dirtree(source)
-	years = list(tree)
-	years.sort()
-
+	articles = [ os.path.join(source, "articles", article) for article in os.listdir(os.path.join(source, "articles")) ]
 	tgts = []
 
-	for year in tree:
+	for article in articles:
 		tgts.append(Target(
-			os.path.join(target, year + ".html"),
-			[os.path.join(source, year, i) for i in tree[year]],
-			index))
-		for i in tree[year]:
-			tgts.append(Target(
-				os.path.join(target, i),
-				[os.path.join(source, year, i)],
-				item))
+			os.path.join(target, os.path.basename(article)),
+			[article],
+			item))
+	
+	tgts.append(Target(
+		os.path.join(target, "index.html"),
+		articles,
+		index))
 
-	tgts.append(
-		Target(
-			os.path.join(target, "index.html"),
-			[os.path.join(target, years[-1]+".html")],
-			move))
 	tgts.append(
 		Target(
 			os.path.join(target, "rss.xml"),
