@@ -54,6 +54,7 @@ def upload (what, user, password):
 
 def main ():
 	if (len(sys.argv) >= 2): os.chdir(sys.argv[1])
+	elif os.path.isdir("render"): os.chdir("render")
 	user = input("Username: ")
 	password = input("Password: ")
 	remove, add = diffs(remote(user, password), local())

@@ -7,7 +7,6 @@ import lxml.etree as ET
 
 timestamp = int(time.time())
 now = time.gmtime(timestamp)
-current_year = time.strftime("%Y", now)
 
 def E (tag, attrs={}, children=[], text=""):
 	elem = ET.Element(tag, attrs)
@@ -18,16 +17,12 @@ def E (tag, attrs={}, children=[], text=""):
 tree = E("html",
 	children=[
 		E("head", children=[
-			E("meta", attrs={"name": "timestamp", "value": str(timestamp)})]),
-		E("body", children=[
-			E("p", text=" ".join(sys.argv[1:]))])])
-
-tgtdir = os.path.join("posts", current_year)
-tgtfile = os.path.join(tgtdir, str(timestamp) + ".html")
-
-if not os.path.isdir(os.path.join("posts", current_year)):
-	os.mkdir(os.path.join("posts", current_year))
+			E("meta", attrs={"name": "timestamp", "value": str(timestamp)}),
+			E("meta", attrs={"name": "type", "value": "note"})]),
+		ET.fromstring("<body>%s</body>" % (sys.stdin.read(),)) ])
+tgtfile = os.path.join("posts", "notes", str(timestamp) + ".html")
 
 with open(tgtfile, "w") as f:
 	f.write("<!DOCTYPE html>")
 	f.write(ET.tostring(tree, encoding="unicode"))
+	print("Wrote", tgtfile)

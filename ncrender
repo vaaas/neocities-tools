@@ -5,6 +5,7 @@ import os
 import re
 import time
 import lxml.etree as ET
+from copy import deepcopy
 
 CONF = {
 	"site": "Vas' Website",
@@ -13,33 +14,23 @@ CONF = {
 
 def now(): return time.strftime('%a, %d %b %Y %H:%M:%S +0000')
 def full_url (partial): return CONF["url"] + partial if partial[0] is "/" else CONF["url"] + "/" + partial
+def replace_start (string, old, new): return new + string[:len(what)]
+
+def ranges (n):
+	div, mod = divmod(n, 20)
+	lst = []
+	for i in range(div - 1):
+		lst.append((i*20, (i+1)*20))
+	if mod < 10:
+		lst.append(((div-1)*20, mod+div*20))
+	else:
+		lst.append(((div-1)*20, div*20))
+		lst.append((div*20, mod+div*20))
+	return lst
 
 def write(path, what):
 	with open(path, "w") as f:
 		f.write(compactify(what))
-
-def dirtree (start):
-	tree = {}
-	for entry in os.listdir(start):
-		pathname = os.path.join(start, entry)
-		tree[entry] = os.listdir(pathname) if os.path.isdir(pathname) else None
-	return tree
-
-class Target:
-	def __init__ (self, pathname, reqs, fn):
-		self.pathname = pathname
-		self.reqs = reqs
-		self.fn = fn
-	
-	def make(self):
-		print(self.pathname, ":", " ".join(self.reqs))
-		self.fn(self.pathname, self.reqs)
-
-	def makep (self):
-		own = os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1
-		others = [os.path.getmtime(req) for req in self.reqs]
-		others.sort()
-		if own < others[-1]: self.make()
 
 def compactify (s):
 	s = re.sub(r"\s+", " ", s, flags=re.MULTILINE)
@@ -51,15 +42,79 @@ def E (tag, attrs={}, children=[], text=""):
 	if (text): elem.text = text
 	return elem
 
-def stamp_to_rfc822(string):
+def stamp_to_rfc822(timestamp):
 	return time.strftime(
 		'%a, %d %b %Y %H:%M:%S +0000',
-		time.gmtime(int(string)))
+		time.gmtime(timestamp))
 
-def stamp_to_ymd(string):
+def stamp_to_ymd(timestamp):
 	return time.strftime(
 		'%Y-%m-%d',
-		time.gmtime(int(string)))
+		time.gmtime(timestamp))
+
+class Target:
+	def __init__ (self, pathname, reqs, fn):
+		self.pathname = pathname
+		self.reqs = reqs
+		self.fn = fn
+	
+	def make(self):
+		print(self.pathname, ":", " ".join([a.pathname for a in self.reqs]))
+		self.fn(self.pathname, self.reqs)
+
+	def makep (self):
+		own = os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1
+		others = [a.mtime for a in self.reqs]
+		others.sort()
+		if own < others[-1]: return True
+		else: return False
+
+class XMLFile:
+	def __init__ (self, pathname):
+		self.pathname = pathname
+		self.tree = ET.parse(self.pathname)
+		self.mtime = os.path.getmtime(self.pathname)
+		self.ctime = int(
+			self.tree.find("./head/meta[@name='timestamp']").attrib["value"])
+		self.type = self.tree.find("./head/meta[@name='type']").attrib["value"]
+		self.typemoji = {
+			"article": "📄 Article ",
+			"note": "📔 Note " }[self.type]
+		if (self.type == "note"):
+			self.href = "/"
+			self.title = self.typemoji + str(self.ctime)
+			self.blurb = deepcopy(self.tree.find(("./body")))
+			self.blurb.tag = "p"
+		else:
+			p = self.pathname.split(os.sep)
+			end = len(p) if p[-1] != "index.html" else -1
+			self.href = os.path.join("/", *p[1:end])
+			self.title = self.tree.find("./head/title").text
+			self.blurb = self.tree.find("./body/p[1]")
+
+	def article (self):
+		elem = E("article", {"data-post-type": self.type})
+		elem.append(E("header", children=[
+			E("span", text=self.typemoji),
+			E("data", {"class": "date", "value": str(self.ctime)},
+				text=stamp_to_ymd(self.ctime))]))
+		if (self.type != "note"):
+			elem.append(E("h1", children=[
+				E("a", { "href": self.href }, text=self.title)]))
+		elem.append(self.blurb)
+		return elem
+	
+	def item (self):
+		if self.type == "note":
+			desc = ET.CDATA(ET.tostring(self.blurb, encoding="unicode"))
+		else:
+			desc = ET.CDATA("""%s<p><a href="%s">Read more</a></p>""" % (ET.tostring(self.blurb, encoding="unicode"), full_url(self.href)))
+		return E("item", {}, [
+			E("title", text=self.title),
+			E("link", text=full_url(self.href)),
+			E("guid", text=self.title if self.type == "note" else self.href),
+			E("pubDate", text=stamp_to_rfc822(self.ctime)),
+			E("description", text=desc)])
 
 def HTML (date, title, content):
 	if not content.tag is "body": content.tag = "body"
@@ -78,41 +133,22 @@ def HTML (date, title, content):
 		content ])
 	return "<!DOCTYPE html>" + ET.tostring(tree, encoding="unicode")
 
-def item (target, reqs):
-	pathname = reqs[0]
-	with open(pathname, "r") as f: tree = ET.fromstring(f.read())
-	title = tree.find("./head/title")
-	title.tag = "h1"
-	body = tree.find("./body")
-	pubdate = tree.find("./head/meta[@name='timestamp']")
-	pubdate.tag = "data"
-	pubdate.attrib["class"] = "date"
-	pubdate.text = stamp_to_ymd(pubdate.attrib["value"])
+def item (xmlfile):
+	body = deepcopy(xmlfile.tree.find("./body"))
+	pubdate = E("data", text=stamp_to_ymd(xmlfile.ctime))
 	header = E("header", {}, [
 		E("a", {"href": "/"}, text=CONF["site"]),
 		pubdate])
-	body.insert(0, title)
+	body.insert(0, E("h1", text=xmlfile.title))
 	body.insert(0, header)
-	return write(target, HTML(
-		stamp_to_rfc822(pubdate.attrib["value"]),
-		title.text,
-		body))
+	return HTML(
+		stamp_to_rfc822(xmlfile.ctime),
+		xmlfile.title,
+		body)
 
-def index (target, articles):
-	def sum_article (article):
-		with open(article, "r") as f: tree = ET.fromstring(f.read())
-		timestamp = tree.find("./head/meta[@name='timestamp']").attrib["value"]
-		title = tree.find("./head/title").text
-		return E("article", {"data-post-type": "article"}, children=[
-			E("header", children=[
-				E("span", text="📄 Article "),
-				E("data", {"class": "date", "value": timestamp}, text=stamp_to_ymd(timestamp))]),
-			E("h1", children=[
-				E("a", { "href": os.path.basename(article) }, text=title)]),
-			tree.find("./body/p[1]")])
-
-	lst = [sum_article(article) for article in articles]
-	lst.sort(key=lambda x: x.find(".//data").attrib["value"], reverse=True)
+def index (articles, href_prev=None, href_next=None):
+	lst = [a.article() for a in articles]
+	lst.reverse()
 
 	header = E("header", {}, [
 		E("div", {}, [
@@ -125,26 +161,18 @@ def index (target, articles):
 			E("a", { "href": "xmpp:vaas@xmpp.jp"}, text="XMPP"),
 			E("a", { "href": "https://github.com/vaaas"}, text="GitHub")])])
 
+	if (href_prev or href_next):
+		pagenav = E("nav")
+		if href_prev: pagenav.append(E("a", {"href": href_prev}))
+		if href_next: pagenav.append(E("a", {"href": href_next}))
+		header.append(pagenav)
+
 	tree = E("body", {"class": "index"}, [header] + lst)
-	return write(target, HTML(now(), CONF["site"], tree))
+	return HTML(now(), CONF["site"], tree)
 
-def rss (target, reqs):
-	index = reqs[0]
-	def article_to_item (a):
-		link = a.find(".//a[1]")
-		pathname = full_url(link.attrib["href"])
-		timestamp = a.find('.//data[@class="date"]').attrib["value"]
-		pubdate = stamp_to_rfc822(timestamp)
-		blurb = ET.CDATA("""%s<p><a href="%s">Read more</a></p>""" % (ET.tostring(a.find("./p"), encoding="unicode"), pathname))
-		return E("item", {}, [
-			E("title", text=link.text),
-			E("link", text=pathname),
-			E("guid", text=pathname),
-			E("pubDate", text=pubdate),
-			E("description", text=blurb)])
-
-	with open(index, "r") as f: itree = ET.fromstring(f.read())
-	items = [article_to_item(a) for a in itree.iterfind(".//article")]
+def rss (articles):
+	items = [a.item() for a in articles]
+	items.reverse()
 	tree = E("rss", {"version": "2.0"}, [
 		E("channel", {}, [
 			E("title", text=CONF["site"]),
@@ -155,7 +183,7 @@ def rss (target, reqs):
 			E("language", text="en-gb"),
 			E("ttl", text="1440")] + items)])
 
-	return write(target, """<?xml version="1.0" encoding="utf-8" ?>""" + ET.tostring(tree, encoding="unicode"))
+	return """<?xml version="1.0" encoding="utf-8" ?>""" + ET.tostring(tree, encoding="unicode")
 
 def move (target, reqs):
 	os.rename(reqs[0], target)
@@ -166,25 +194,28 @@ def main (args):
 	source = "posts"
 	target = "render"
 
-	articles = [ os.path.join(source, "articles", article) for article in os.listdir(os.path.join(source, "articles")) ]
 	tgts = []
+	xmlfiles = []
+	for (root, dirs, files) in os.walk(source):
+		xmlfiles += [os.path.join(root, f) for f in files]
+	xmlfiles = [XMLFile(f) for f in xmlfiles]
+	xmlfiles.sort(key=lambda x: x.ctime)
 
-	for article in articles:
-		tgts.append(Target(
-			os.path.join(target, os.path.basename(article)),
-			[article],
-			item))
-	
-	tgts.append(Target(
-		os.path.join(target, "index.html"),
-		articles,
-		index))
+	for f in [i for i in xmlfiles if i.type != "note"]:
+		parts = f.pathname.split(os.sep)
+		parts[0] = target
+		for i in range(len(parts)-1):
+			pathname = os.path.join(*parts[:i+1])
+			if not os.path.isdir(pathname): os.mkdir(pathname)
+		tgts.append(Target(os.path.join(*parts), [f], lambda me, reqs: write(me, item(reqs[0]))))
 
-	tgts.append(
-		Target(
-			os.path.join(target, "rss.xml"),
-			[os.path.join(target, "index.html")],
-			rss))
+	tgts.append(Target(os.path.join(target, "rss.xml"), xmlfiles[:10], lambda me, reqs: write(me, rss(reqs))))
+
+	rng = ranges(len(xmlfiles))
+	for (start, end) in rng[:-1]:
+		pathname = os.path.join(target, "index" + end + ".html")
+		tgts.append(Target(pathname, xmlfiles[start:end], lambda me, reqs: write(me, index(reqs))))
+	tgts.append(Target(os.path.join(target, "index.html"), xmlfiles[rng[-1][0]:rng[-1][1]], lambda me, reqs: write(me, index(reqs))))
 
 	for tgt in tgts:
 		if FORCE or tgt.makep():
