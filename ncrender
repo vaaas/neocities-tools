@@ -36,10 +36,11 @@ def compactify (s):
 	s = re.sub(r"\s+", " ", s, flags=re.MULTILINE)
 	return s
 
-def E (tag, attrs={}, children=[], text=""):
+def E (tag, attrs={}, children=[], text="", tail=""):
 	elem = ET.Element(tag, attrs)
 	for child in children: elem.append(child)
 	if (text): elem.text = text
+	if (tail): elem.tail = tail
 	return elem
 
 def stamp_to_rfc822(timestamp):
@@ -77,12 +78,12 @@ class XMLFile:
 		self.ctime = int(
 			self.tree.find("./head/meta[@name='timestamp']").attrib["value"])
 		self.type = self.tree.find("./head/meta[@name='type']").attrib["value"]
-		self.typemoji = {
-			"article": "📄 Article ",
-			"note": "📔 Note " }[self.type]
+		self.typename = {
+			"article": "Article",
+			"note": "Note" }[self.type]
 		if (self.type == "note"):
 			self.href = "/"
-			self.title = self.typemoji + str(self.ctime)
+			self.title = "%s %s" % (self.typename, str(self.ctime))
 			self.blurb = deepcopy(self.tree.find(("./body")))
 			self.blurb.tag = "p"
 		else:
@@ -95,7 +96,8 @@ class XMLFile:
 	def article (self):
 		elem = E("article", {"data-post-type": self.type})
 		elem.append(E("header", children=[
-			E("span", text=self.typemoji),
+			E("img", {"class": "emoji", "src": "/pics/%s.svg" % (self.type,)}),
+			E("strong", text=" "+self.typename),
 			E("data", {"class": "date", "value": str(self.ctime)},
 				text=stamp_to_ymd(self.ctime))]))
 		if (self.type != "note"):
@@ -152,7 +154,7 @@ def index (articles, href_prev=None, href_next=None):
 
 	header = E("header", {}, [
 		E("div", {}, [
-			E("img", {"alt": "website icon", "id": "icon", "src": "/pics/icon.png"}),
+			E("img", {"alt": "website icon", "id": "icon", "src": "/pics/icon.jpg"}),
 			E("h1", {}, text=CONF["site"])]),
 		E("p", text=CONF["desc"]),
 		E("nav", {}, [
@@ -209,7 +211,7 @@ def main (args):
 			if not os.path.isdir(pathname): os.mkdir(pathname)
 		tgts.append(Target(os.path.join(*parts), [f], lambda me, reqs: write(me, item(reqs[0]))))
 
-	tgts.append(Target(os.path.join(target, "rss.xml"), xmlfiles[:10], lambda me, reqs: write(me, rss(reqs))))
+	tgts.append(Target(os.path.join(target, "rss.xml"), xmlfiles[:20], lambda me, reqs: write(me, rss(reqs))))
 
 	rng = ranges(len(xmlfiles))
 	for (start, end) in rng[:-1]:
