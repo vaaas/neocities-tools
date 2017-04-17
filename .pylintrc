@@ -1,0 +1,5 @@
+[FORMAT]
+indent-string=\t
+
+[MESSAGES CONTROL]
+disable=missing-docstring,bad-continuation

@@ -4,64 +4,69 @@ import os
 import json
 import subprocess
 
-def exit (s):
-	print(s)
+def byebye(string):
+	print(string)
 	sys.exit(1)
 
-def yes_p (s): return s.lower() in ["y", "ye", "yes", "yeah", "yup"]
+def yes_p(string):
+	return string.lower() in ["y", "ye", "yes", "yeah", "yup"]
 
-def remote (user, password):
+def remote(user, password):
 	argv = ["/usr/bin/curl", "https://%s:%s@neocities.org/api/list" % (user, password)]
 	j = subprocess.check_output(argv, universal_newlines=True)
 	j = json.loads(j)
-	if j["result"] != "success": exit("Getting remote files failed")
-	return { f["path"]: f["size"] for f in j["files"] if not f["is_directory"] }
+	if j["result"] != "success":
+		byebye("Getting remote files failed")
+	return {f["path"]: f["size"] for f in j["files"] if not f["is_directory"]}
 
-def local ():
-	r = dict()
+def local_files():
+	loc = dict()
 	for root, dirs, files in os.walk("."):
-		for f in files:
-			path = os.path.relpath(os.path.join(root, f), ".")
+		for i in files:
+			path = os.path.relpath(os.path.join(root, i), ".")
 			size = os.stat(path).st_size
-			r[path] = size
-	return r
+			loc[path] = size
+	return loc
 
-def diffs (remote, local):
-	rset = set(remote)
-	lset = set(local)
-	delete = rset.difference(lset)
-	add = lset.difference(rset)
-	common = rset.intersection(lset)
-	for f in common:
-		if remote[f] != local[f]: add.add(f)
-	return delete, add
+def diffs(remlist, loclist):
+	rset = set(remlist)
+	lset = set(loclist)
+	remset = rset.difference(lset)
+	addset = lset.difference(rset)
+	commonset = rset.intersection(lset)
+	for i in commonset:
+		if remlist[i] != loclist[i]:
+			addset.add(i)
+	return remset, addset
 
-def delete (what, user, password):
+def remove_remote(what, user, password):
 	argv = ["/usr/bin/curl"]
-	for f in what:
+	for i in what:
 		argv.append("-d")
-		argv.append("filenames[]=" + f)
+		argv.append("filenames[]=" + i)
 	argv.append("https://%s:%s@neocities.org/api/delete" % (user, password))
 	subprocess.call(argv, stdout=sys.stdout, stderr=sys.stderr)
 
-def upload (what, user, password):
+def upload(what, user, password):
 	argv = ["/usr/bin/curl"]
-	for f in what:
+	for i in what:
 		argv.append("-F")
-		argv.append("%s=@%s" % (f,f))
+		argv.append("%s=@%s" % (i, i))
 	argv.append("https://%s:%s@neocities.org/api/upload" % (user, password))
 	subprocess.call(argv, stdout=sys.stdout, stderr=sys.stderr)
 
-def main ():
-	if (len(sys.argv) >= 2): os.chdir(sys.argv[1])
-	elif os.path.isdir("render"): os.chdir("render")
+def main():
+	if len(sys.argv) >= 2:
+		os.chdir(sys.argv[1])
+	elif os.path.isdir("render"):
+		os.chdir("render")
 	user = input("Username: ")
 	password = input("Password: ")
-	remove, add = diffs(remote(user, password), local())
+	remove, add = diffs(remote(user, password), local_files())
 	if remove:
 		print("Deleting", ", ".join(remove))
 		if yes_p(input("Proceed? [y/n] > ")):
-			delete(remove, user, password)
+			remove_remote(remove, user, password)
 			print("Done")
 	else: print("Nothing to delete")
 	if add:
@@ -69,6 +74,8 @@ def main ():
 		if yes_p(input("Proceed? [y/n] > ")):
 			upload(add, user, password)
 			print("Done")
-	else: print("Nothing to upload")
+	else:
+		print("Nothing to upload")
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+	main()
