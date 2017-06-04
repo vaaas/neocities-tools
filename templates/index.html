@@ -1,0 +1,42 @@
+{% include 'base.html' %} 
+{% block body %}
+<body class="index">
+<header>
+	<div>
+		<img alt="website icon" id="icon" src="/pics/icon.jpg"/>
+		<h1>{{conf["site"]}}</h1>
+	</div>
+	<p>{{conf["desc"]}}</p>
+	<nav>
+		<a href="/rss.xml">RSS Feed</a>
+		<a href="mailto:whiterocket@outlook.com">Email</a>
+		<a href="xmpp:vaas@xmpp.jp">XMPP</a>
+		<a href="https://github.com/vaaas">Github</a>
+	</nav>
+	{% if href_prev or href_next %}
+		<nav>
+			{% if href_prev %}
+				<a href="{{util.url_nohost(href_prev)}}">← Older</a>
+			{% endif %}
+			{% if href_next %}
+				<a href="{{util.url_nohost(href_next)}}">Newer →</a>
+			{% endif %}
+		</nav>
+	{% endif %}
+</header>
+
+{% for item in items %}
+	<article data-post-type="{{item.type}}">
+		<header>
+			<img class="emoji" src="/pics/{{item.type}}.svg"/>
+			<strong>{{item.typename}}</strong>
+			<data class="date" value="{{item.ctime}}">{{util.stamp_to_ymd(item.ctime)}}</date>
+		</header>
+		{% if item.type != "note" %}
+			<h1><a href="{{item.href}}">{{item.title}}</a></h1>
+		{% endif %}
+		{{item.blurb}}
+	</article>
+{% endfor %}
+</body>
+{% endblock %}

@@ -4,19 +4,35 @@ import sys
 import os
 import re
 import time
-from copy import deepcopy
+import json
 import lxml.etree as ET
+from jinja2 import Environment, FileSystemLoader
 
-CONF = {
-	"site": "Vas' Website",
-	"desc": "A blog on technology, nerddom, and politics",
-	"url": "https://vas.neocities.org"}
+TPL = Environment(loader=FileSystemLoader("templates"))
+CONF = json.load(open("config", "r"))
 
-def now():
-	return time.strftime('%a, %d %b %Y %H:%M:%S +0000')
+class Util:
+	def now():
+		return time.strftime("%a, %d %b %Y %H:%M:%S +0000")
 
-def full_url(partial):
-	return CONF["url"] + partial if partial[0] is "/" else CONF["url"] + "/" + partial
+	def full_url(partial):
+		return CONF["url"] + Util.url_nohost(partial)
+
+	def url_nohost(partial):
+		p = partial.split("/")
+		if p[-1] == "index.html": p[-1] = ""
+		if p[0] != "": p.insert(0, "")
+		return "/".join(p)
+
+	def stamp_to_rfc822(timestamp):
+		return time.strftime(
+			"%a, %d %b %Y %H:%M:%S +0000",
+			time.gmtime(timestamp))
+
+	def stamp_to_ymd(timestamp):
+		return time.strftime(
+			"%Y-%m-%d",
+			time.gmtime(timestamp))
 
 def ranges(count):
 	div, mod = divmod(count, 20)
@@ -40,25 +56,12 @@ def compactify(string):
 def tostring(tree):
 	return ET.tostring(tree, encoding="unicode", method="xml")
 
-def E(tag, attrs={}, children=[], text="", tail=""):
-	elem = ET.Element(tag, attrs)
-	for child in children:
-		elem.append(child)
-	if text:
-		elem.text = text
-	if tail:
-		elem.tail = tail
-	return elem
-
-def stamp_to_rfc822(timestamp):
-	return time.strftime(
-		'%a, %d %b %Y %H:%M:%S +0000',
-		time.gmtime(timestamp))
-
-def stamp_to_ymd(timestamp):
-	return time.strftime(
-		'%Y-%m-%d',
-		time.gmtime(timestamp))
+def econtents(elem):
+	string = tostring(elem)
+	length = len("<%s>" % (elem.tag,))
+	start = string.find("<%s>" % (elem.tag,))
+	end = string.rfind("</%s>" % (elem.tag,))
+	return string[start+length:end]
 
 class Target:
 	def __init__(self, pathname, reqs, callback):
@@ -79,130 +82,36 @@ class Target:
 class XMLFile:
 	def __init__(self, pathname):
 		self.pathname = pathname
-		self.tree = ET.parse(self.pathname)
+		tree = ET.parse(self.pathname)
+		self.body = econtents(tree.find("./body"))
 		self.mtime = os.path.getmtime(self.pathname)
 		self.ctime = int(
-			self.tree.find("./head/meta[@name='timestamp']").attrib["value"])
-		self.type = self.tree.find("./head/meta[@name='type']").attrib["value"]
+			tree.find("./head/meta[@name='timestamp']").attrib["value"])
+		self.type = tree.find("./head/meta[@name='type']").attrib["value"]
 		self.typename = {
 			"article": "Article",
 			"note": "Note"}[self.type]
 		if self.type == "note":
 			self.href = "/"
 			self.title = "%s %s" % (self.typename, str(self.ctime))
-			self.blurb = deepcopy(self.tree.find(("./body")))
-			self.blurb.tag = "p"
+			self.blurb = self.body
 		else:
-			parts = self.pathname.split(os.sep)
-			end = len(parts) if parts[-1] != "index.html" else -1
-			self.href = os.path.join("/", *parts[1:end])
-			self.title = self.tree.find("./head/title").text
-			self.blurb = self.tree.find("./body/p[1]")
-
-	def article(self):
-		elem = E("article", {"data-post-type": self.type})
-		elem.append(E("header", children=[
-			E("img", {"class": "emoji", "src": "/pics/%s.svg" % (self.type,)}),
-			E("strong", text=" "+self.typename),
-			E("data", {"class": "date", "value": str(self.ctime)},
-				text=stamp_to_ymd(self.ctime))]))
-		if self.type != "note":
-			elem.append(E("h1", children=[
-				E("a", {"href": self.href}, text=self.title)]))
-		elem.append(self.blurb)
-		return elem
-
-	def item(self):
-		if self.type == "note":
-			desc = ET.CDATA(tostring(self.blurb))
-		else:
-			desc = ET.CDATA(
-				"""%s<p><a href="%s">Read more</a></p>""" % (
-					tostring(self.blurb),
-					full_url(self.href)))
-		return E("item", {}, [
-			E("title", text=self.title),
-			E("link", text=full_url(self.href)),
-			E("guid", text=self.title if self.type == "note" else self.href),
-			E("pubDate", text=stamp_to_rfc822(self.ctime)),
-			E("description", text=desc)])
-
-def html(date, title, content):
-	if not content.tag is "body":
-		content.tag = "body"
-
-	tree = E("html", {"lang": "en-gb"}, [
-		E("head", {}, [
-			E("meta", {"charset": "utf-8"}),
-			E("meta", {"name": "viewport", "content": "width=device-width, initial-scale=1.0"}),
-			E("meta", {"name": "url", "content": CONF["url"]}),
-			E("meta", {"name": "author", "content": "Vas"}),
-			E("meta", {"name": "description", "content": CONF["desc"]}),
-			E("meta", {"name": "date", "content": date}),
-			E("link", {"rel": "stylesheet", "href": "/style.css"}),
-			E("link", {"rel": "icon", "href": "/favicon.ico?v=2"}),
-			E("link", {"rel": "alternate", "href": "/rss.xml", "type": "application/rss+xml"}),
-			E("title", text=title)]),
-		content])
-
-	return "<!DOCTYPE html>" + tostring(tree)
+			self.href = Util.url_nohost("/".join(self.pathname.split("/")[1:]))
+			self.title = econtents(tree.find("./head/title"))
+			self.blurb = econtents(tree.find("./body/p[1]"))
 
 def item(xmlfile):
-	body = deepcopy(xmlfile.tree.find("./body"))
-	pubdate = E("data", text=stamp_to_ymd(xmlfile.ctime))
-	header = E("header", {}, [
-		E("a", {"href": "/"}, text=CONF["site"]),
-		pubdate])
-	body.insert(0, E("h1", text=xmlfile.title))
-	body.insert(0, header)
-	return html(
-		stamp_to_rfc822(xmlfile.ctime),
-		xmlfile.title,
-		body)
+	template = TPL.get_template("item.html")
+	return template.render(conf=CONF, item=xmlfile, util=Util, title=xmlfile.title, date=Util.stamp_to_rfc822(xmlfile.ctime))
 
 def index(articles, href_prev=None, href_next=None):
-	lst = [a.article() for a in articles]
-	lst.reverse()
-
-	header = E("header", {}, [
-		E("div", {}, [
-			E("img", {"alt": "website icon", "id": "icon", "src": "/pics/icon.jpg"}),
-			E("h1", {}, text=CONF["site"])]),
-		E("p", text=CONF["desc"]),
-		E("nav", {}, [
-			E("a", {"href": "/rss.xml"}, text="RSS feed"),
-			E("a", {"href": "mailto:whiterocket@outlook.com"}, text="Email"),
-			E("a", {"href": "xmpp:vaas@xmpp.jp"}, text="XMPP"),
-			E("a", {"href": "https://github.com/vaaas"}, text="GitHub")])])
-
-	if href_prev or href_next:
-		pagenav = E("nav")
-		if href_prev:
-			pagenav.append(E("a", {"href": href_prev}))
-		if href_next:
-			pagenav.append(E("a", {"href": href_next}))
-		header.append(pagenav)
-
-	tree = E("body", {"class": "index"}, [header] + lst)
-	return html(now(), CONF["site"], tree)
+	articles.reverse()
+	template = TPL.get_template("index.html")
+	return template.render(conf=CONF, items=articles, util=Util, title=CONF["site"], date=Util.now(), href_prev=href_prev, href_next=href_next)
 
 def rss(articles):
-	items = [a.item() for a in articles]
-	items.reverse()
-	tree = E("rss", {"version": "2.0"}, [
-		E("channel", {}, [
-			E("title", text=CONF["site"]),
-			E("link", text=CONF["url"]),
-			E("description", text=CONF["desc"]),
-			E("pubDate", text=items[0].find("./pubDate").text),
-			E("lastBuildDate", text=now()),
-			E("language", text="en-gb"),
-			E("ttl", text="1440")] + items)])
-
-	return """<?xml version="1.0" encoding="utf-8" ?>""" + tostring(tree)
-
-def move(target, reqs):
-	os.rename(reqs[0], target)
+	template = TPL.get_template("rss.xml")
+	return template.render(conf=CONF, items=articles, util=Util)
 
 def main(args):
 	force = len(args) > 0 and args[0] == "-f"
@@ -229,18 +138,17 @@ def main(args):
 
 	tgts.append(Target(
 		os.path.join(target, "rss.xml"),
-		xmlfiles[:20],
+		xmlfiles[-20:],
 		lambda me, reqs: write(me, rss(reqs))))
 
-	rng = ranges(len(xmlfiles))
-	for start, end in rng[:-1]:
-		pathname = os.path.join(target, "index" + str(end) + ".html")
-		tgts.append(Target(pathname, xmlfiles[start:end],
-			lambda me, reqs: write(me, index(reqs))))
-	tgts.append(Target(
-		os.path.join(target, "index.html"),
-		xmlfiles[rng[-1][0]:rng[-1][1]],
-		lambda me, reqs: write(me, index(reqs))))
+	args = [{"name": "index%s.html" % (str(start),), "xmlfiles": xmlfiles[start:end]} for start, end in ranges(len(xmlfiles))]
+	args[-1]["name"] = "index.html"
+	for i in range(len(args)):
+		args[i]["href_prev"] = "/" + args[i-1]["name"] if i > 0 else None
+		args[i]["href_next"] = "/" + args[i+1]["name"] if i+1 < len(args) else None
+	for i in args:
+		tgts.append(Target(os.path.join(target, i["name"]), i["xmlfiles"],
+			lambda me, reqs, p=i["href_prev"], n=i["href_next"]: write(me, index(reqs, p, n))))
 
 	for tgt in tgts:
 		if force or tgt.makep():

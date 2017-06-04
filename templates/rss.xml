@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0">
+<channel>
+	<title>{{conf["site"]}}</title>
+	<link>{{conf["url"]}}</link>
+	<description>{{conf["desc"]}}</description>
+	<pubDate>{{util.stamp_to_ymd(items[0].ctime)}}</pubDate>
+	<lastBuildDate>{{util.now()}}</lastBuildDate>
+	<language>en-gb</language>
+	<ttl>1440</ttl>
+	{% for item in items %}
+		<title>{{item.title}}</title>
+		<link>{{util.full_url(item.href)}}</link>
+		<guid>
+			{% if item.type == "note" %}
+				{{item.title}}
+			{% else %}
+				{{item.href}}
+			{% endif %}
+		</guid>
+		<pubDate>{{util.stamp_to_rfc822(item.ctime)}}</pubDate>
+		<description>
+			{% if item.type == "note" %}
+				<![CDATA[<p>{{item.blurb}}</p>]]>
+			{% else %}
+				<![CDATA[
+					<p>{{item.blurb}}</p>
+					<p><a href="{{util.full_url(item.href)}}">Read more</a></p>
+				]]>
+			{% endif %}
+		</description>
+	{% endfor %}
+</channel>
+</rss>
