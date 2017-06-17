@@ -6,15 +6,16 @@ import sys
 import subprocess
 import lxml.etree as ET
 
+TMP_PATH = os.path.join(os.environ["XDG_RUNTIME_DIR"] or "/tmp", "postnoteeditvar.txt")
+
 def editvar(var=""):
-	pathname = os.path.join(os.environ["XDG_RUNTIME_DIR"] or "/tmp", "postnoteeditvar.txt")
-	with open(pathname, "w") as fil:
+	with open(TMP_PATH, "w") as fil:
 		fil.write(var)
-	retcode = subprocess.call([os.environ["EDITOR"] or "vim", pathname])
+	retcode = subprocess.call([os.environ["EDITOR"] or "vim", TMP_PATH])
 	if retcode != 0:
 		print("Aborted")
 		sys.exit(1)
-	with open(pathname, "r") as fil:
+	with open(TMP_PATH, "r") as fil:
 		return fil.read()
 
 def E(tag, attrs={}, children=[], text=""):
@@ -28,12 +29,20 @@ def E(tag, attrs={}, children=[], text=""):
 def main():
 	timestamp = int(time.time())
 	tgtfile = os.path.join("posts", "notes", str(timestamp) + ".html")
+	body = None
+	var = ""
+	while body is None:
+		var = editvar(var)
+		try:
+			body = ET.fromstring("<body>%s</body>" % (var,))
+		except:
+			continue
 	tree = E("html",
 		children=[
 			E("head", children=[
 				E("meta", attrs={"name": "timestamp", "value": str(timestamp)}),
 				E("meta", attrs={"name": "type", "value": "note"})]),
-			ET.fromstring("<body>%s</body>" % (editvar(),))])
+			body])
 
 	with open(tgtfile, "w") as fil:
 		fil.write("<!DOCTYPE html>")
