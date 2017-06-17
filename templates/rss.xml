@@ -9,6 +9,7 @@
 	<language>en-gb</language>
 	<ttl>1440</ttl>
 	{% for item in items %}
+	<item>
 		<title>{{item.title}}</title>
 		<link>{{util.full_url(item.href)}}</link>
 		<guid>
@@ -29,6 +30,7 @@
 				]]>
 			{% endif %}
 		</description>
+	</item>
 	{% endfor %}
 </channel>
 </rss>

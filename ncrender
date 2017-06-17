@@ -110,6 +110,7 @@ def index(articles, href_prev=None, href_next=None):
 	return template.render(conf=CONF, items=articles, util=Util, title=CONF["site"], date=Util.now(), href_prev=href_prev, href_next=href_next)
 
 def rss(articles):
+	articles.reverse()
 	template = TPL.get_template("rss.xml")
 	return template.render(conf=CONF, items=articles, util=Util)
 
