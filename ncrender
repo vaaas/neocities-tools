@@ -79,26 +79,33 @@ class Target:
 		others.sort()
 		return own < others[-1]
 
-class XMLFile:
+class XMLFile: pass
+
+class Article(XMLFile):
 	def __init__(self, pathname):
+		self.type = "Article"
 		self.pathname = pathname
+		self.mtime = os.path.getmtime(self.pathname)
 		tree = ET.parse(self.pathname)
 		self.body = econtents(tree.find("./body"))
-		self.mtime = os.path.getmtime(self.pathname)
 		self.ctime = int(
 			tree.find("./head/meta[@name='timestamp']").attrib["value"])
-		self.type = tree.find("./head/meta[@name='type']").attrib["value"]
-		self.typename = {
-			"article": "Article",
-			"note": "Note"}[self.type]
-		if self.type == "note":
-			self.href = "/"
-			self.title = "%s %s" % (self.typename, str(self.ctime))
-			self.blurb = self.body
-		else:
-			self.href = Util.url_nohost("/".join(self.pathname.split("/")[1:]))
-			self.title = econtents(tree.find("./head/title"))
-			self.blurb = econtents(tree.find("./body/p[1]"))
+		self.href = Util.url_nohost("/".join(self.pathname.split("/")[1:]))
+		self.title = econtents(tree.find("./head/title"))
+		self.blurb = econtents(tree.find("./body/p[1]"))
+
+class Note(XMLFile):
+	def __init__(self, pathname):
+		self.type = "Note"
+		self.pathname = pathname
+		self.mtime = os.path.getmtime(self.pathname)
+		tree = ET.parse(self.pathname)
+		self.body = econtents(tree.find("./body"))
+		self.ctime = int(
+			tree.find("./head/meta[@name='timestamp']").attrib["value"])
+		self.href = "/"
+		self.title = "%s %s" % (self.type, str(self.ctime))
+		self.blurb = self.body
 
 def item(xmlfile):
 	template = TPL.get_template("item.html")
@@ -121,13 +128,12 @@ def main(args):
 	target = "render"
 
 	tgts = []
-	xmlfiles = []
-	for root, dirs, files in os.walk(source):
-		xmlfiles += [os.path.join(root, f) for f in files]
-	xmlfiles = [XMLFile(f) for f in xmlfiles]
+	xmlfiles = (
+		[Article(os.path.join(source, "articles", i)) for i in os.listdir(os.path.join(source, "articles"))] +
+		[Note(os.path.join(source, "notes", i)) for i in os.listdir(os.path.join(source, "notes"))])
 	xmlfiles.sort(key=lambda x: x.ctime)
 
-	for xmlfile in [xmlfile for xmlfile in xmlfiles if xmlfile.type != "note"]:
+	for xmlfile in [xmlfile for xmlfile in xmlfiles if xmlfile.type != "Note"]:
 		parts = xmlfile.pathname.split(os.sep)
 		parts[0] = target
 		for i in range(len(parts)-1):

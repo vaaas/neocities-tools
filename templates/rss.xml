@@ -13,7 +13,7 @@
 		<title>{{item.title}}</title>
 		<link>{{util.full_url(item.href)}}</link>
 		<guid>
-			{% if item.type == "note" %}
+			{% if item.type == "Note" %}
 				{{item.title}}
 			{% else %}
 				{{item.href}}
@@ -21,7 +21,7 @@
 		</guid>
 		<pubDate>{{util.stamp_to_rfc822(item.ctime)}}</pubDate>
 		<description>
-			{% if item.type == "note" %}
+			{% if item.type == "Note" %}
 				<![CDATA[<p>{{item.blurb}}</p>]]>
 			{% else %}
 				<![CDATA[

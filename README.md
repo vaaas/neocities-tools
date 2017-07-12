@@ -51,7 +51,6 @@ Files placed in ```posts/articles``` must follow this format:
 <html>
 	<head>
 		<meta name="timestamp" value="SECONDS SINCE EPOCH"/>
-		<meta name="type" value="article"/>
 		<title>YOUR TITLE</title>
 	</head>
 	<body>YOUR STUFF</body>
@@ -65,7 +64,6 @@ And those in ```posts/notes```:
 <html>
 	<head>
 		<meta name="timestamp" value="SECONDS SINCE EPOCH"/>
-		<meta name="type" value="note"/>
 	</head>
 	<body>YOUR STUFF</body>
 </html>

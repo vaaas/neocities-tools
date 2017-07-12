@@ -26,13 +26,13 @@
 </header>
 
 {% for item in items %}
-	<article data-post-type="{{item.type}}">
+	<article data-post-type="{{item.type.lower()}}">
 		<header>
-			<img class="emoji" src="/pics/{{item.type}}.svg"/>
-			<strong>{{item.typename}}</strong>
+			<img class="emoji" src="/pics/{{item.type.lower()}}.svg"/>
+			<strong>{{item.type}}</strong>
 			<data class="date" value="{{item.ctime}}">{{util.stamp_to_ymd(item.ctime)}}</date>
 		</header>
-		{% if item.type != "note" %}
+		{% if item.type != "Note" %}
 			<h1><a href="{{item.href}}">{{item.title}}</a></h1>
 		{% endif %}
 		{{item.blurb}}
