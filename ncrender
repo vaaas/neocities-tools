@@ -34,15 +34,15 @@ class Util:
 			"%Y-%m-%d",
 			time.gmtime(timestamp))
 
-def ranges(count):
-	div, mod = divmod(count, 20)
+def ranges(count, lim=CONF["items"]):
+	div, mod = divmod(count, lim)
 	lst = []
 	for i in range(div):
-		lst.append([i*20, (i+1)*20])
+		lst.append([i*lim, (i+1)*lim])
 	if mod < 10:
 		lst[-1][-1] += mod
 	else:
-		lst.append([div*20, div*20 + mod])
+		lst.append([div*lim, div*lim + mod])
 	return lst
 
 def write(path, what):
@@ -70,7 +70,7 @@ class Target:
 		self.callback = callback
 
 	def make(self):
-		print(self.pathname, ":", " ".join([a.pathname for a in self.reqs]))
+		print("‘\033[1m\033[92m" + self.pathname + "\033[0m’" + ":", " ".join([a.pathname for a in self.reqs]))
 		self.callback(self.pathname, self.reqs)
 
 	def makep(self):
@@ -139,7 +139,7 @@ def main(args):
 
 	tgts.append(Target(
 		os.path.join(target, "rss.xml"),
-		xmlfiles[-20:],
+		xmlfiles[-CONF["items"]:],
 		lambda me, reqs: write(me, rss(reqs))))
 
 	args = [{"name": "index%s.html" % (str(start),), "xmlfiles": xmlfiles[start:end]} for start, end in ranges(len(xmlfiles))]
