@@ -2,8 +2,8 @@
 
 Tools for easing management of a neocities site.
 
-- ```ncpush```: pushes the ```render``` directory or the directory that's the first argument to neocities, recursively. Also deletes files.
-- ```ncrender```: a static blog generator. Reads from ```posts``` and outputs to ```render```. Generates an index, an RSS feed, and pages for each article.
+- ```ncpush```: syncs the ```render``` directory by default with neocities, recursively. Takes an optional first argument for the directory to sync.
+- ```ncrender```: a static blog generator. Reads from ```posts``` and outputs to ```render```. Generates an index, an RSS feed, and pages for each article. It tries not to regenerate the entire website every time; use the optional ```-f``` argument to force a full rebuild.
 - ```postnote```: helper script for posting notes (short unstructured posts, like tweets). Uses your default editor (```$EDITOR```), and the format is HTML-like.
 
 ## Dependencies
