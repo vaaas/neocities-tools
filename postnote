@@ -34,14 +34,13 @@ def main():
 	while body is None:
 		var = editvar(var)
 		try:
-			body = ET.fromstring("<body>%s</body>" % (var,))
+			body = ET.fromstring("<body>\n<p>%s</p>\n</body>" % (var,))
 		except:
 			continue
 	tree = E("html",
 		children=[
 			E("head", children=[
-				E("meta", attrs={"name": "timestamp", "value": str(timestamp)}),
-				E("meta", attrs={"name": "type", "value": "note"})]),
+				E("meta", attrs={"name": "timestamp", "value": str(timestamp)})]),
 			body])
 
 	with open(tgtfile, "w") as fil:

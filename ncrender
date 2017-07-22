@@ -33,6 +33,9 @@ class Util:
 		return time.strftime(
 			"%Y-%m-%d",
 			time.gmtime(timestamp))
+	
+	def gen_title(item):
+		return "%s %s" % (item.type, str(item.ctime))
 
 def ranges(count, lim=CONF["items"]):
 	div, mod = divmod(count, lim)
@@ -63,6 +66,11 @@ def econtents(elem):
 	end = string.rfind("</%s>" % (elem.tag,))
 	return string[start+length:end]
 
+def inner_text(elem):
+	def it_help (elem):
+		return (elem.text or "") + "".join([it_help(i) for i in elem]) + (elem.tail or "")
+	return (elem.text or "") + "".join([it_help(i) for i in elem])
+
 class Target:
 	def __init__(self, pathname, reqs, callback):
 		self.pathname = pathname
@@ -79,33 +87,62 @@ class Target:
 		others.sort()
 		return own < others[-1]
 
-class XMLFile: pass
+class XMLFile:
+	def __init__ (self, pathname):
+		self.pathname = pathname
+		stat = os.stat(self.pathname)
+		self.mtime = stat.st_mtime
+		self.size = stat.st_size
+		self.tree = ET.parse(self.pathname)
+		self.ctime = int(
+			self.tree.find("./head/meta[@name='timestamp']").attrib["value"])
+		tmp = self.tree.find("./body/h1")
+		self.title = None if tmp is None else inner_text(tmp)
+		self.blurb = tostring(self.tree.find("./body//p[1]"))
 
 class Article(XMLFile):
+	type = "Article"
 	def __init__(self, pathname):
-		self.type = "Article"
-		self.pathname = pathname
-		self.mtime = os.path.getmtime(self.pathname)
-		tree = ET.parse(self.pathname)
-		self.body = econtents(tree.find("./body"))
-		self.ctime = int(
-			tree.find("./head/meta[@name='timestamp']").attrib["value"])
+		super(Article, self).__init__(pathname)
 		self.href = Util.url_nohost("/".join(self.pathname.split("/")[1:]))
-		self.title = econtents(tree.find("./head/title"))
-		self.blurb = econtents(tree.find("./body/p[1]"))
+		self.body = econtents(self.tree.find("./body"))
+		del self.tree
 
 class Note(XMLFile):
+	type = "Note"
 	def __init__(self, pathname):
-		self.type = "Note"
-		self.pathname = pathname
-		self.mtime = os.path.getmtime(self.pathname)
-		tree = ET.parse(self.pathname)
-		self.body = econtents(tree.find("./body"))
-		self.ctime = int(
-			tree.find("./head/meta[@name='timestamp']").attrib["value"])
+		super(Note, self).__init__(pathname)
 		self.href = "/"
-		self.title = "%s %s" % (self.type, str(self.ctime))
-		self.blurb = self.body
+		del self.tree
+
+class Link(XMLFile):
+	type = "Link"
+	def __init__(self, pathname):
+		super(Link, self).__init__(pathname)
+		self.href = self.tree.find("./body/h1/a[1]").attrib["href"]
+		del self.tree
+
+class Picture(XMLFile):
+	type = "Picture"
+	def __init__(self, pathname):
+		super(Picture, self).__init__(pathname)
+		self.href = self.tree.find("./body/p/a[1]").attrib["href"]
+		del self.tree
+
+class Video(XMLFile):
+	type = "Video"
+	def __init__(self, pathname):
+		super(Video, self).__init__(pathname)
+		self.href = self.tree.find("./body/h1/a[1]").attrib["href"]
+		del self.tree
+
+def selector(string):
+	return {
+		"articles": Article,
+		"notes": Note,
+		"pictures": Picture,
+		"videos": Video,
+		"links": Link}[string]
 
 def item(xmlfile):
 	template = TPL.get_template("item.html")
@@ -127,13 +164,13 @@ def main(args):
 	source = "posts"
 	target = "render"
 
-	tgts = []
-	xmlfiles = (
-		[Article(os.path.join(source, "articles", i)) for i in os.listdir(os.path.join(source, "articles"))] +
-		[Note(os.path.join(source, "notes", i)) for i in os.listdir(os.path.join(source, "notes"))])
+	xmlfiles = []
+	for tp in os.listdir(source):
+		xmlfiles += [selector(tp)(os.path.join(source, tp, i)) for i in os.listdir(os.path.join(source,tp))]
 	xmlfiles.sort(key=lambda x: x.ctime)
 
-	for xmlfile in [xmlfile for xmlfile in xmlfiles if xmlfile.type != "Note"]:
+	tgts = []
+	for xmlfile in [xmlfile for xmlfile in xmlfiles if xmlfile.type == "Article"]:
 		parts = xmlfile.pathname.split(os.sep)
 		parts[0] = target
 		for i in range(len(parts)-1):

@@ -30,9 +30,9 @@
 		<header>
 			<img class="emoji" src="/pics/{{item.type.lower()}}.svg"/>
 			<strong>{{item.type}}</strong>
-			<data class="date" value="{{item.ctime}}">{{util.stamp_to_ymd(item.ctime)}}</date>
+			<data class="date" value="{{item.ctime}}">{{util.stamp_to_ymd(item.ctime)}}</data>
 		</header>
-		{% if item.type != "Note" %}
+		{% if item.title %}
 			<h1><a href="{{item.href}}">{{item.title}}</a></h1>
 		{% endif %}
 		{{item.blurb}}
