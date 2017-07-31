@@ -36,7 +36,10 @@ class Util:
 	
 	def gen_title(item):
 		return "%s %s" % (item.type, str(item.ctime))
-
+	
+	def gen_uri(item):
+		return Util.full_url("%s/%s" % (item.type, str(item.ctime)))
+	
 def ranges(count, lim=CONF["items"]):
 	div, mod = divmod(count, lim)
 	lst = []
@@ -71,6 +74,11 @@ def inner_text(elem):
 		return (elem.text or "") + "".join([it_help(i) for i in elem]) + (elem.tail or "")
 	return (elem.text or "") + "".join([it_help(i) for i in elem])
 
+def html_escape(string):
+	return (string.replace("&", "&amp;")
+		.replace("<", "&lt;")
+		.replace(">", "&gt;"))
+
 class Target:
 	def __init__(self, pathname, reqs, callback):
 		self.pathname = pathname
@@ -97,7 +105,7 @@ class XMLFile:
 		self.ctime = int(
 			self.tree.find("./head/meta[@name='timestamp']").attrib["value"])
 		tmp = self.tree.find("./body/h1")
-		self.title = None if tmp is None else inner_text(tmp)
+		self.title = None if tmp is None else html_escape(inner_text(tmp))
 		self.blurb = tostring(self.tree.find("./body//p[1]"))
 
 class Article(XMLFile):
@@ -119,21 +127,21 @@ class Link(XMLFile):
 	type = "Link"
 	def __init__(self, pathname):
 		super(Link, self).__init__(pathname)
-		self.href = self.tree.find("./body/h1/a[1]").attrib["href"]
+		self.href = html_escape(self.tree.find("./body/h1/a[1]").attrib["href"])
 		del self.tree
 
 class Picture(XMLFile):
 	type = "Picture"
 	def __init__(self, pathname):
 		super(Picture, self).__init__(pathname)
-		self.href = self.tree.find("./body/p/a[1]").attrib["href"]
+		self.href = html_escape(self.tree.find("./body/p/a[1]").attrib["href"])
 		del self.tree
 
 class Video(XMLFile):
 	type = "Video"
 	def __init__(self, pathname):
 		super(Video, self).__init__(pathname)
-		self.href = self.tree.find("./body/h1/a[1]").attrib["href"]
+		self.href = html_escape(self.tree.find("./body/h1/a[1]").attrib["href"])
 		del self.tree
 
 def selector(string):

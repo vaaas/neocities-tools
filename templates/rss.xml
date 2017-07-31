@@ -4,7 +4,7 @@
 	<title>{{conf["site"]}}</title>
 	<link>{{conf["url"]}}</link>
 	<description>{{conf["desc"]}}</description>
-	<pubDate>{{util.stamp_to_ymd(items[0].ctime)}}</pubDate>
+	<pubDate>{{util.stamp_to_rfc822(items[0].ctime)}}</pubDate>
 	<lastBuildDate>{{util.now()}}</lastBuildDate>
 	<language>en-gb</language>
 	<ttl>1440</ttl>
@@ -20,13 +20,13 @@
 		{% else %}
 			<link>{{item.href}}</link>
 		{% endif %}
-		<guid>
-			{% if item.type == "Note" %}
-				{{item.title}}
-			{% else %}
-				{{item.href}}
-			{% endif %}
-		</guid>
+		{% if item.type == "Note" %}
+			<guid>{{util.gen_uri(item)}}</guid>
+		{% elif item.href.startswith("/") %}
+			<guid>{{util.full_url(item.href)}}</guid>
+		{% else %}
+			<guid>{{item.href}}</guid>
+		{% endif %}
 		<pubDate>{{util.stamp_to_rfc822(item.ctime)}}</pubDate>
 		<description>
 			{% if item.type == "Article" %}
