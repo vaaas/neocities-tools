@@ -104,7 +104,7 @@ def post_picture():
 			E("head", children=[
 				E("meta", attrs={"name": "timestamp", "value": str(timestamp)})]),
 			E("body", children=[
-				ET.fromstring("<p><a href=\"%s\"><img src=\"%s\"/></a>%s</p>" % ((attr_escape(data["Link"]),) * 2 + (base_escape(data["Caption"]),)))])])
+				ET.fromstring("<p><a href=\"%s\"><img src=\"%s\"/></a>%s</p>" % ((attr_escape(data["Link"]),) * 2 + (data["Caption"],)))])])
 	writefile(tgtfile, tree)
 
 def main():
