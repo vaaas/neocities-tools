@@ -69,6 +69,16 @@ def econtents(elem):
 	end = string.rfind("</%s>" % (elem.tag,))
 	return string[start+length:end]
 
+def linkify(root):
+	def doit(elem, attr):
+		if elem.attrib[attr][0] == "/":
+			elem.attrib[attr] = Util.full_url(elem.attrib[attr])
+	hrefs = root.findall("//*[@href]")
+	srcs = root.findall("//*[@src]")
+	for elem in hrefs: doit(elem, "href")
+	for elem in srcs: doit(elem, "src")
+	return root
+
 def inner_text(elem):
 	def it_help (elem):
 		return (elem.text or "") + "".join([it_help(i) for i in elem]) + (elem.tail or "")
@@ -101,7 +111,7 @@ class XMLFile:
 		stat = os.stat(self.pathname)
 		self.mtime = stat.st_mtime
 		self.size = stat.st_size
-		self.tree = ET.parse(self.pathname)
+		self.tree = linkify(ET.parse(self.pathname))
 		self.ctime = int(
 			self.tree.find("./head/meta[@name='timestamp']").attrib["value"])
 		tmp = self.tree.find("./body/h1")
