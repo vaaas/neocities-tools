@@ -1,7 +1,12 @@
 {
 	"author": "Vas",
 	"site": "Vas' Website",
-	"desc": "A blog on technology, nerddom, and politics",
+	"desc": "A blog on technology, nerddom, and politics. Intentionally edgy; don't take things too seriously.",
 	"url": "https://vas.neocities.org",
-	"items": 100
+	"items": 100,
+	"links": [
+		{ "title": "Email", "link": "mailto:whiterocket@outlook.com" },
+		{ "title": "XMPP", "link": "xmpp:vaas@xmpp.jp" },
+		{ "title": "Github", "link": "https://github.com/vaaas" }
+	]
 }

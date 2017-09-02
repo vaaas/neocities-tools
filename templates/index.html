@@ -4,15 +4,16 @@
 <header>
 	<div>
 		<img alt="website icon" id="icon" src="/pics/icon.jpg"/>
-		<h1>{{conf["site"]}}</h1>
+		<h1>{{conf["site"]}} <a href="/rss.xml"><img class="emoji" src="/pics/feed-icon.svg" alt="feed icon"/></a></h1>
 	</div>
 	<p>{{conf["desc"]}}</p>
-	<nav>
-		<a href="/rss.xml">RSS Feed</a>
-		<a href="mailto:whiterocket@outlook.com">Email</a>
-		<a href="xmpp:vaas@xmpp.jp">XMPP</a>
-		<a href="https://github.com/vaaas">Github</a>
-	</nav>
+	{% if conf["links"] %}
+		<nav>
+			{% for item in conf["links"] %}
+				<a href="{{item.link}}">{{item.title}}</a>
+			{% endfor %}
+		</nav>
+	{% endif %}
 	{% if href_prev or href_next %}
 		<nav>
 			{% if href_prev %}
@@ -24,7 +25,6 @@
 		</nav>
 	{% endif %}
 </header>
-
 {% for item in items %}
 	<article data-post-type="{{item.type.lower()}}">
 		<header>
