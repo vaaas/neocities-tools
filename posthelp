@@ -62,7 +62,7 @@ def post_note():
 	tree = E("html",
 		children=[
 			E("head", children=[
-				E("meta", attrs={"name": "timestamp", "value": str(timestamp)})]),
+				E("meta", attrs={"name": "timestamp", "content": str(timestamp)})]),
 			E("body", children=[
 				ET.fromstring("<p>%s</p>" % (data["Note"],))])])
 	writefile(tgtfile, tree)
@@ -74,7 +74,7 @@ def post_link():
 	tree = E("html",
 		children=[
 			E("head", children=[
-				E("meta", attrs={"name": "timestamp", "value": str(timestamp)})]),
+				E("meta", attrs={"name": "timestamp", "content": str(timestamp)})]),
 			E("body", children=[
 				E("h1", children=[
 					E("a", {"href": attr_escape(data["Link"])}, text=base_escape(data["Header"]))]),
@@ -88,7 +88,7 @@ def post_video():
 	tree = E("html",
 		children=[
 			E("head", children=[
-				E("meta", attrs={"name": "timestamp", "value": str(timestamp)})]),
+				E("meta", attrs={"name": "timestamp", "content": str(timestamp)})]),
 			E("body", children=[
 				E("h1", children=[
 					E("a", {"href": attr_escape(data["Link"])}, text=base_escape(data["Header"]))]),
@@ -102,7 +102,7 @@ def post_picture():
 	tree = E("html",
 		children=[
 			E("head", children=[
-				E("meta", attrs={"name": "timestamp", "value": str(timestamp)})]),
+				E("meta", attrs={"name": "timestamp", "content": str(timestamp)})]),
 			E("body", children=[
 				ET.fromstring("<p><a href=\"%s\"><img src=\"%s\"/></a>%s</p>" % ((attr_escape(data["Link"]),) * 2 + (data["Caption"],)))])])
 	writefile(tgtfile, tree)

@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader
 
 TPL = Environment(loader=FileSystemLoader("templates"))
 CONF = json.load(open("config", "r"))
+CONF["about"] = open("about.html").read()
 
 class Util:
 	def now():
@@ -55,6 +56,13 @@ def write(path, what):
 	with open(path, "w") as fil:
 		fil.write(compactify(what))
 
+def copy(target, source):
+	tfile = open(target, "w")
+	sfile = open(source.pathname, "r")
+	tfile.write(sfile.read())
+	tfile.close()
+	sfile.close()
+
 def compactify(string):
 	string = re.sub(r"\s+", " ", string, flags=re.MULTILINE)
 	return string
@@ -81,7 +89,9 @@ def linkify(root):
 
 def inner_text(elem):
 	def it_help (elem):
-		return (elem.text or "") + "".join([it_help(i) for i in elem]) + (elem.tail or "")
+		return ((elem.text or "") +
+			"".join([it_help(i) for i in elem]) +
+			(elem.tail or ""))
 	return (elem.text or "") + "".join([it_help(i) for i in elem])
 
 def html_escape(string):
@@ -96,11 +106,13 @@ class Target:
 		self.callback = callback
 
 	def make(self):
-		print("‘\033[1m\033[92m" + self.pathname + "\033[0m’" + ":", " ".join([a.pathname for a in self.reqs]))
+		print("‘\033[1m\033[92m" + self.pathname + "\033[0m’" + ":",
+			" ".join([a.pathname for a in self.reqs]))
 		self.callback(self.pathname, self.reqs)
 
 	def makep(self):
-		own = os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1
+		own = (os.path.getmtime(self.pathname)
+			if os.path.isfile(self.pathname) else -1)
 		others = [a.mtime for a in self.reqs]
 		others.sort()
 		return own < others[-1]
@@ -113,9 +125,11 @@ class XMLFile:
 		self.size = stat.st_size
 		self.tree = linkify(ET.parse(self.pathname))
 		self.ctime = int(
-			self.tree.find("./head/meta[@name='timestamp']").attrib["value"])
-		tmp = self.tree.find("./body/h1")
-		self.title = None if tmp is None else html_escape(inner_text(tmp))
+			self.tree.find("./head/meta[@name='timestamp']")
+			.attrib["content"])
+		self.title = self.tree.find("./body/h1")
+		self.title = (None if self.title is None
+			else html_escape(inner_text(self.title)))
 		self.blurb = tostring(self.tree.find("./body//p[1]"))
 
 class Article(XMLFile):
@@ -137,22 +151,50 @@ class Link(XMLFile):
 	type = "Link"
 	def __init__(self, pathname):
 		super(Link, self).__init__(pathname)
-		self.href = html_escape(self.tree.find("./body/h1/a[1]").attrib["href"])
+		self.href = html_escape(
+			self.tree.find("./body/h1/a[1]")
+			.attrib["href"])
 		del self.tree
 
 class Picture(XMLFile):
 	type = "Picture"
 	def __init__(self, pathname):
 		super(Picture, self).__init__(pathname)
-		self.href = html_escape(self.tree.find("./body/p/a[1]").attrib["href"])
+		self.href = html_escape(
+			self.tree.find("./body/p/a[1]")
+			.attrib["href"])
 		del self.tree
 
 class Video(XMLFile):
 	type = "Video"
 	def __init__(self, pathname):
 		super(Video, self).__init__(pathname)
-		self.href = html_escape(self.tree.find("./body/h1/a[1]").attrib["href"])
+		self.href = html_escape(
+			self.tree.find("./body/h1/a[1]")
+			.attrib["href"])
 		del self.tree
+
+class App(XMLFile):
+	type = "App"
+	def __init__(self, pathname):
+		self.pathname = pathname
+		stat = os.stat(self.pathname)
+		self.mtime = stat.st_mtime
+		self.size = stat.st_size
+		self.tree = ET.parse(self.pathname, parser=ET.HTMLParser())
+		self.ctime = int(
+			self.tree.find("./head/meta[@name='timestamp']")
+			.attrib["content"])
+		self.title = html_escape(
+			inner_text(
+				self.tree.find("./head/title")))
+		self.href = Util.url_nohost(
+			"/".join(
+				self.pathname.split("/")[1:]))
+		self.blurb = ET.Element("p")
+		self.blurb.text = (self.tree.find("./head/meta[@name='description']")
+			.attrib["content"])
+		self.blurb = tostring(self.blurb)
 
 def selector(string):
 	return {
@@ -160,16 +202,20 @@ def selector(string):
 		"notes": Note,
 		"pictures": Picture,
 		"videos": Video,
-		"links": Link}[string]
+		"links": Link,
+		"apps": App}[string]
 
 def item(xmlfile):
 	template = TPL.get_template("item.html")
-	return template.render(conf=CONF, item=xmlfile, util=Util, title=xmlfile.title, date=Util.stamp_to_rfc822(xmlfile.ctime))
+	return template.render(conf=CONF, item=xmlfile, util=Util,
+		title=xmlfile.title, date=Util.stamp_to_rfc822(xmlfile.ctime))
 
 def index(articles, href_prev=None, href_next=None):
 	articles.reverse()
 	template = TPL.get_template("index.html")
-	return template.render(conf=CONF, items=articles, util=Util, title=CONF["site"], date=Util.now(), href_prev=href_prev, href_next=href_next)
+	return template.render(conf=CONF, items=articles, util=Util,
+		title=CONF["site"], date=Util.now(),
+		href_prev=href_prev, href_next=href_next)
 
 def rss(articles):
 	articles.reverse()
@@ -184,11 +230,12 @@ def main(args):
 
 	xmlfiles = []
 	for tp in os.listdir(source):
-		xmlfiles += [selector(tp)(os.path.join(source, tp, i)) for i in os.listdir(os.path.join(source,tp))]
+		xmlfiles += [selector(tp)(os.path.join(source, tp, i))
+			for i in os.listdir(os.path.join(source,tp))]
 	xmlfiles.sort(key=lambda x: x.ctime)
 
 	tgts = []
-	for xmlfile in [xmlfile for xmlfile in xmlfiles if xmlfile.type == "Article"]:
+	for xmlfile in [i for i in xmlfiles if i.type == "Article"]:
 		parts = xmlfile.pathname.split(os.sep)
 		parts[0] = target
 		for i in range(len(parts)-1):
@@ -198,19 +245,34 @@ def main(args):
 		tgts.append(Target(os.path.join(*parts), [xmlfile],
 			lambda me, reqs: write(me, item(reqs[0]))))
 
+	for xmlfile in [i for i in xmlfiles if i.type == "App"]:
+		parts = xmlfile.pathname.split(os.sep)
+		parts[0] = target
+		for i in range(len(parts)-1):
+			pathname = os.path.join(*parts[:i+1])
+			if not os.path.isdir(pathname):
+				os.mkdir(pathname)
+		tgts.append(Target(os.path.join(*parts), [xmlfile],
+			lambda me, reqs: copy(me, reqs[0])))
+
 	tgts.append(Target(
 		os.path.join(target, "rss.xml"),
 		xmlfiles[-CONF["items"]:],
 		lambda me, reqs: write(me, rss(reqs))))
 
-	args = [{"name": "index%s.html" % (str(start),), "xmlfiles": xmlfiles[start:end]} for start, end in ranges(len(xmlfiles))]
+	args = [{
+			"name": "index%s.html" % (str(start),),
+			"xmlfiles": xmlfiles[start:end]}
+		for start, end in ranges(len(xmlfiles))]
 	args[-1]["name"] = "index.html"
 	for i in range(len(args)):
 		args[i]["href_prev"] = "/" + args[i-1]["name"] if i > 0 else None
-		args[i]["href_next"] = "/" + args[i+1]["name"] if i+1 < len(args) else None
+		args[i]["href_next"] = ("/" + args[i+1]["name"]
+			if i+1 < len(args) else None)
 	for i in args:
 		tgts.append(Target(os.path.join(target, i["name"]), i["xmlfiles"],
-			lambda me, reqs, p=i["href_prev"], n=i["href_next"]: write(me, index(reqs, p, n))))
+			lambda me, reqs, p=i["href_prev"], n=i["href_next"]:
+				write(me, index(reqs, p, n))))
 
 	for tgt in tgts:
 		if force or tgt.makep():

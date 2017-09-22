@@ -6,7 +6,6 @@
 		<img alt="website icon" id="icon" src="/pics/icon.jpg"/>
 		<h1>{{conf["site"]}} <a href="/rss.xml"><img class="emoji" src="/pics/feed-icon.svg" alt="feed icon"/></a></h1>
 	</div>
-	<p>{{conf["desc"]}}</p>
 	{% if conf["links"] %}
 		<nav>
 			{% for item in conf["links"] %}
@@ -25,6 +24,10 @@
 		</nav>
 	{% endif %}
 </header>
+<section id="about">
+	{{conf["about"]}}
+</section>
+<section id="blog">
 {% for item in items %}
 	<article data-post-type="{{item.type.lower()}}">
 		<header>
@@ -38,5 +41,6 @@
 		{{item.blurb}}
 	</article>
 {% endfor %}
+</section>
 </body>
 {% endblock %}

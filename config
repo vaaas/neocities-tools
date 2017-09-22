@@ -5,6 +5,7 @@
 	"url": "https://vas.neocities.org",
 	"items": 100,
 	"links": [
+		{ "title": "Blog", "link": "#blog" },
 		{ "title": "Email", "link": "mailto:whiterocket@outlook.com" },
 		{ "title": "XMPP", "link": "xmpp:vaas@xmpp.jp" },
 		{ "title": "Github", "link": "https://github.com/vaaas" }
