@@ -3,7 +3,7 @@
 <body>
 <header>
 	<a href="/">{{conf["site"]}}</a>
-	<data>{{util.stamp_to_ymd(item.ctime)}}</data>
+	<data value="{{item.ctime}}">{{util.stamp_to_ymd(item.ctime)}}</data>
 </header>
 {{item.body}}
 </body>

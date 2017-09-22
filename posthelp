@@ -10,7 +10,7 @@ TMP_PATH = os.path.join(os.environ["XDG_RUNTIME_DIR"] or "/tmp", "postnoteeditva
 TEMPLATES = {
 	"note": "Note\t",
 	"link": "Link\t\nHeader\t\nCaption\t",
-	"picture": "Link\t\nCaption\t" }
+	"picture": "Link\t\nAltext\t\nCaption\t" }
 
 def attr_escape(string):
 	return (base_escape(string)
@@ -104,7 +104,7 @@ def post_picture():
 			E("head", children=[
 				E("meta", attrs={"name": "timestamp", "content": str(timestamp)})]),
 			E("body", children=[
-				ET.fromstring("<p><a href=\"%s\"><img src=\"%s\"/></a>%s</p>" % ((attr_escape(data["Link"]),) * 2 + (data["Caption"],)))])])
+				ET.fromstring("<p><a href=\"%s\"><img src=\"%s\" alt=\"%s\"/></a>%s</p>" % ((attr_escape(data["Link"]),) * 2 + (data["Altext"], data["Caption"])))])])
 	writefile(tgtfile, tree)
 
 def main():
