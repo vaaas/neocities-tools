@@ -274,6 +274,17 @@ def main(args):
 			lambda me, reqs, p=i["href_prev"], n=i["href_next"]:
 				write(me, index(reqs, p, n))))
 
+	tgts.append(
+		Target(
+			os.path.join(target, "articles", "index.html"),
+			list(filter(lambda i: i.type is "Article", xmlfiles)),
+			lambda me, reqs: write(me, index(reqs))))
+	tgts.append(
+		Target(
+			os.path.join(target, "apps", "index.html"),
+			list(filter(lambda i: i.type is "App", xmlfiles)),
+			lambda me, reqs: write(me, index(reqs))))
+
 	for tgt in tgts:
 		if force or tgt.makep():
 			tgt.make()

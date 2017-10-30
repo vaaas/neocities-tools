@@ -15,7 +15,7 @@
 <section id="about">
 	{{conf["about"]}}
 </section>
-<section id="blog">
+<main>
 {% if href_prev or href_next %}
 	<nav>
 		{% if href_prev %}
@@ -39,6 +39,6 @@
 		{{item.blurb}}
 	</article>
 {% endfor %}
-</section>
+</main>
 </body>
 {% endblock %}
