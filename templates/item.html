@@ -1,9 +1,6 @@
 {% extends "base.html" %}
 {% block body %}
 <body>
-<a href="/">
-	<img alt="website banner" id="banner" src="/pics/banner.jpg"/>
-</a>
 <header>
 	<a href="/">{{conf.site}}</a> — <data value="{{item.ctime}}">{{util.stamp_to_ymd(item.ctime)}}</data>
 </header>
