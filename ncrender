@@ -6,11 +6,15 @@ import re
 import time
 import json
 import lxml.etree as ET
+from glob import glob
 from jinja2 import Environment, FileSystemLoader
 
 TPL = Environment(loader=FileSystemLoader("templates"))
 CONF = json.load(open("config", "r"))
 CONF["about"] = open("about.html").read()
+
+def type_filter(thetype, thestuff):
+	return filter(lambda x: x.type is thetype, thestuff)
 
 class Util:
 	def now():
@@ -36,21 +40,24 @@ class Util:
 			time.gmtime(timestamp))
 	
 	def gen_title(item):
-		return "%s %s" % (item.type, str(item.ctime))
+		return "%s %d" % (item.type, item.ctime)
 	
 	def gen_uri(item):
-		return Util.full_url("%s/%s" % (item.type, str(item.ctime)))
+		return Util.full_url("%s/%d" % (item.type, item.ctime))
 	
-def ranges(count, lim=CONF["items"]):
+def paginate_index(collection, name="index%s.html", lim=CONF["items"]):
+	length = len(collection)
 	div, mod = divmod(count, lim)
-	lst = []
-	for i in range(div):
-		lst.append([i*lim, (i+1)*lim])
-	if mod < 10:
-		lst[-1][-1] += mod
-	else:
-		lst.append([div*lim, div*lim + mod])
-	return lst
+	items = []
+	for i in range(div if mod == 0 else div+1):
+		items.append({
+			"name": name % (str(i*lim,)),
+			"items": collection[i*lim:(i+1)*lim]})
+	items[-1]["name"] = name % ("",)
+	for i in range(len(args)):
+		args[i]["prev"] = items[i - 1]["name"] if i > 0 else None
+		args[i]["next"] = items[i + 1]["name"] if i + 1 < length else None
+	return items
 
 def write(path, what):
 	with open(path, "w") as fil:
@@ -116,6 +123,17 @@ class Target:
 		others = [a.mtime for a in self.reqs]
 		others.sort()
 		return own < others[-1]
+
+class PaginatedTarget(Target):
+	def __init__(self, pathname, reqs, prev, next, callback):
+		super(PaginatedTarget, self).__init__(pathname, reqs, callback)
+		self.reqs = reqs
+		self.prev = prev
+
+	def make(self):
+		print("‘\033[1m\033[92m" + self.pathname + "\033[0m’" + ":",
+			" ".join([a.pathname for a in self.reqs]))
+		self.callback(self.pathname, self.reqs, self.prev, self.next)
 
 class XMLFile:
 	def __init__ (self, pathname):
@@ -228,62 +246,42 @@ def main(args):
 	source = "posts"
 	target = "render"
 
-	xmlfiles = []
-	for tp in os.listdir(source):
-		xmlfiles += [selector(tp)(os.path.join(source, tp, i))
-			for i in os.listdir(os.path.join(source,tp))]
-	xmlfiles.sort(key=lambda x: x.ctime)
-
+	xmlfiles = [selector(i)(i) for i in glob("posts/**/*html", recursive=True)]
 	tgts = []
-	for xmlfile in [i for i in xmlfiles if i.type == "Article"]:
-		parts = xmlfile.pathname.split(os.sep)
-		parts[0] = target
-		for i in range(len(parts)-1):
-			pathname = os.path.join(*parts[:i+1])
-			if not os.path.isdir(pathname):
-				os.mkdir(pathname)
-		tgts.append(Target(os.path.join(*parts), [xmlfile],
-			lambda me, reqs: write(me, item(reqs[0]))))
 
-	for xmlfile in [i for i in xmlfiles if i.type == "App"]:
-		parts = xmlfile.pathname.split(os.sep)
-		parts[0] = target
-		for i in range(len(parts)-1):
-			pathname = os.path.join(*parts[:i+1])
-			if not os.path.isdir(pathname):
-				os.mkdir(pathname)
-		tgts.append(Target(os.path.join(*parts), [xmlfile],
-			lambda me, reqs: copy(me, reqs[0])))
+	for xmlfile in type_filter("Article", xmlfiles):
+		tpath = re.sub(r"^posts/", "render/", xml.file.pathname)
+		tgts.append(Target(tpath, [xmlfile],
+			lambda path, reqs: write(path, item(reqs[0]))))
+
+	for xmlfile in type_filter("App", xmlfiles):
+		tpath = re.sub(r"^posts/", "render/", xml.file.pathname)
+		tgts.append(Target(tpath, [xmlfile],
+			lambda path, reqs: copy(path, reqs[0])))
 
 	tgts.append(Target(
-		os.path.join(target, "rss.xml"),
+		"render/rss.xml",
 		xmlfiles[-CONF["items"]:],
-		lambda me, reqs: write(me, rss(reqs))))
+		lambda path, reqs: write(path, rss(reqs))))
 
-	args = [{
-			"name": "index%s.html" % (str(start),),
-			"xmlfiles": xmlfiles[start:end]}
-		for start, end in ranges(len(xmlfiles))]
-	args[-1]["name"] = "index.html"
-	for i in range(len(args)):
-		args[i]["href_prev"] = "/" + args[i-1]["name"] if i > 0 else None
-		args[i]["href_next"] = ("/" + args[i+1]["name"]
-			if i+1 < len(args) else None)
-	for i in args:
-		tgts.append(Target(os.path.join(target, i["name"]), i["xmlfiles"],
-			lambda me, reqs, p=i["href_prev"], n=i["href_next"]:
-				write(me, index(reqs, p, n))))
+	for i in paginate_index(xmlfiles, "/index%s.html"):
+		tgts.append(PaginatedTarget(
+			"render"+i["name"],
+			i["items"],
+			i["prev"], i["next"],
+			lambda path, reqs, p, n:
+				write(path, index(reqs, p, n))))
 
 	tgts.append(
 		Target(
-			os.path.join(target, "articles", "index.html"),
-			list(filter(lambda i: i.type is "Article", xmlfiles)),
-			lambda me, reqs: write(me, index(reqs))))
+			"render/articles/index.html",
+			list(type_filter("Article", xmlfiles)),
+			lambda path, reqs: write(path, index(reqs))))
 	tgts.append(
 		Target(
-			os.path.join(target, "apps", "index.html"),
-			list(filter(lambda i: i.type is "App", xmlfiles)),
-			lambda me, reqs: write(me, index(reqs))))
+			"render/apps/index.html",
+			list(type_filter("App", xmlfiles)),
+			lambda path, reqs: write(path, index(reqs))))
 
 	for tgt in tgts:
 		if force or tgt.makep():
