@@ -12,18 +12,12 @@ body {
 	color: #444;
 	background-color: #eee; }
 a { color: #04a; }
-nav > a { margin: 0 1em; }
-nav > a:last-of-type { margin-right: 0; }
-nav > a:first-of-type { margin-left: 0; }
 nav { line-height: 2em; }
-article {
-	margin-bottom: 1em;
-	border-bottom: 1px dashed #aaa;
-	padding-bottom: 1em; }
-article:last-of-type {
-	margin-bottom: 0;
-	border-bottom: none;
-	padding-bottom: 0; }
+nav > a { margin: 0 1em; }
+article + article {
+	margin-top: 1em;
+	border-top: 1px dashed #aaa;
+	padding-top: 1em; }
 main { margin-top: 3em; }
 article h1 {
 	font-size: 100%;
@@ -35,7 +29,7 @@ img {
 	display: block;
 	max-width: 100%; }
 body > header, nav, figcaption { text-align: center; }
-body > header { margin: 1em; }
+body > header { padding: 1em 0; }
 main article p, ul { margin: 0; }
 .emoji {
 	width: 1em;
