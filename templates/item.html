@@ -2,7 +2,7 @@
 {% block body %}
 <body>
 <header>
-	<a href="/">{{conf.site}}</a> — <data value="{{item.ctime}}">{{util.stamp_to_ymd(item.ctime)}}</data>
+	<a href="/">{{conf.site}}</a> — <data value="{{item.ctime}}">{{item.ctimeymd}}</data>
 </header>
 {{item.body}}
 </body>

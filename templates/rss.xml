@@ -4,35 +4,21 @@
 	<title>{{conf["site"]}}</title>
 	<link>{{conf["url"]}}</link>
 	<description>{{conf["desc"]}}</description>
-	<pubDate>{{util.stamp_to_rfc822(items[0].ctime)}}</pubDate>
-	<lastBuildDate>{{util.now()}}</lastBuildDate>
+	<pubDate>{{items[0].ctimerfc}}</pubDate>
+	<lastBuildDate>{{now}}</lastBuildDate>
 	<language>en-gb</language>
 	<ttl>1440</ttl>
 	{% for item in items %}
 	<item>
-		{% if item.title %}
-			<title>{{item.title}}</title>
-		{% else %}
-			<title>{{util.gen_title(item)}}</title>
-		{% endif %}
-		{% if item.href.startswith("/") %}
-			<link>{{util.full_url(item.href)}}</link>
-		{% else %}
-			<link>{{item.href}}</link>
-		{% endif %}
-		{% if item.type == "Note" %}
-			<guid>{{util.gen_uri(item)}}</guid>
-		{% elif item.href.startswith("/") %}
-			<guid>{{util.full_url(item.href)}}</guid>
-		{% else %}
-			<guid>{{item.href}}</guid>
-		{% endif %}
-		<pubDate>{{util.stamp_to_rfc822(item.ctime)}}</pubDate>
+		<title>{{item.title}}</title>
+		<link>{{item.href}}</link>
+		<guid>{{item.guid}}</guid>
+		<pubDate>{{item.ctimerfc}}</pubDate>
 		<description>
 			{% if item.type == "Article" %}
 				<![CDATA[
 					<p>{{item.blurb}}</p>
-					<p><a href="{{util.full_url(item.href)}}">Read more</a></p>
+					<p><a href="{{item.href}}">Read more</a></p>
 				]]>
 			{% else %}
 				<![CDATA[{{item.blurb}}]]>
