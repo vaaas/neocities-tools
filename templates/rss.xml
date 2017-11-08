@@ -10,7 +10,7 @@
 	<ttl>1440</ttl>
 	{% for item in items %}
 	<item>
-		<title>{{item.title}}</title>
+		<title>{{item.title or item.gentitle}}</title>
 		<link>{{item.href}}</link>
 		<guid>{{item.guid}}</guid>
 		<pubDate>{{item.ctimerfc}}</pubDate>

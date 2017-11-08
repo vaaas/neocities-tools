@@ -35,31 +35,27 @@ def gen_title(item):
 
 def gen_uri(item):
 	return ("%s/%d" % (item.type, item.ctime))
-	
+
+def htmlext(string):
+	return re.sub(r".json$", ".html", string)
+
 def paginate_index(collection, name="index%s.html", lim=CONF["items"]):
 	length = len(collection)
-	div, mod = divmod(count, lim)
+	div, mod = divmod(length, lim)
 	items = []
 	for i in range(div if mod == 0 else div+1):
 		items.append({
 			"name": name % (str(i*lim,)),
 			"items": collection[i*lim:(i+1)*lim]})
 	items[-1]["name"] = name % ("",)
-	for i in range(len(args)):
-		args[i]["prev"] = items[i - 1]["name"] if i > 0 else None
-		args[i]["next"] = items[i + 1]["name"] if i + 1 < length else None
+	for i in range(len(items)):
+		items[i]["prev"] = items[i - 1]["name"] if i > 0 else None
+		items[i]["next"] = items[i + 1]["name"] if i < (len(items)-1) else None
 	return items
 
 def write(path, what):
 	with open(path, "w") as fil:
 		fil.write(compactify(what))
-
-def copy(target, source):
-	tfile = open(target, "w")
-	sfile = open(source.pathname, "r")
-	tfile.write(sfile.read())
-	tfile.close()
-	sfile.close()
 
 def compactify(string):
 	string = re.sub(r"\s+", " ", string, flags=re.MULTILINE)
@@ -103,6 +99,7 @@ class PaginatedTarget(Target):
 		super(PaginatedTarget, self).__init__(pathname, reqs, callback)
 		self.reqs = reqs
 		self.prev = prev
+		self.next = next
 
 	def make(self):
 		print("‘\033[1m\033[92m" + self.pathname + "\033[0m’" + ":",
@@ -117,31 +114,32 @@ class Post:
 		self.mtime = stat.st_mtime
 		self.size = stat.st_size
 		data = json.load(open(self.pathname, "r"))
-		self.ctime = data["ctime"]
+		self.ctime = data["cdate"]
 		self.ctimeymd = stamp_to_ymd(self.ctime)
-		sefl.ctimerfc = stamp_to_rfc822(self.ctime)
-		self.title = dget(data, "title") || gen_title(self)
-		self.guid = self.href || gen_uri(self)
+		self.ctimerfc = stamp_to_rfc822(self.ctime)
+		self.title = dget(data, "title")
+		self.gentitle = None if self.title else gen_title(self)
+		self.guid = self.href or gen_uri(self)
 		self.blurb = data["blurb"]
 		self.body = dget(data, "body")
 
 class Article(Post):
 	type = "Article"
 	def __init__(self, pathname):
+		self.href = htmlext(re.sub("^posts/", "/", pathname))
 		super(Article, self).__init__(pathname)
-		self.href = re.sub("^posts/", "/", self.pathname)
 
 class Note(Post):
 	type = "Note"
 	def __init__(self, pathname):
-		super(Note, self).__init__(pathname)
 		self.href = "/"
+		super(Note, self).__init__(pathname)
 
 class App(Post):
 	type = "App"
 	def __init__(self, pathname):
+		self.href = htmlext(re.sub("^posts/", "/", pathname))
 		super(App, self).__init__(pathname)
-		self.href = re.sub("^posts/", "/", self.pathname)
 
 def selector(string):
 	part = string.split("/")[1]
@@ -153,7 +151,7 @@ def selector(string):
 def item(post):
 	template = TPL.get_template("item.html")
 	return template.render(conf=CONF, item=post,
-		title=xmlfile.title, date=stamp_to_rfc822(xmlfile.ctime))
+		title=post.title, date=stamp_to_rfc822(post.ctime))
 
 def index(posts, prev=None, next=None):
 	posts.reverse()
@@ -177,20 +175,19 @@ def rss(articles):
 def main(args):
 	force = len(args) > 0 and args[0] == "-f"
 
-	dbc = sqlite3.connect("blog.sqlite")
-
 	posts = [selector(i)(i) for i in glob("posts/**/*json", recursive=True)]
+	posts.sort(key=lambda x: x.ctime)
 	tgts = []
 
 	for post in type_filter("Article", posts):
-		tpath = re.sub(r"^posts/", "render/", xml.file.pathname)
+		tpath = htmlext(re.sub(r"^posts/", "render/", post.pathname))
 		tgts.append(Target(tpath, [post],
 			lambda path, reqs: write(path, item(reqs[0]))))
 
 	for post in type_filter("App", posts):
-		tpath = re.sub(r"^posts/", "render/", xml.file.pathname)
+		tpath = htmlext(re.sub(r"^posts/", "render/", post.pathname))
 		tgts.append(Target(tpath, [post],
-			lambda path, reqs: copy(path, reqs[0])))
+			lambda path, reqs: write(path, reqs[0].body)))
 
 	tgts.append(Target(
 		"render/rss.xml",
