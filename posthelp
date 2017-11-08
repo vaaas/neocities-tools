@@ -3,119 +3,20 @@
 import time
 import os
 import sys
-import subprocess
-import lxml.etree as ET
+import json
 
-TMP_PATH = os.path.join(os.environ["XDG_RUNTIME_DIR"] or "/tmp", "postnoteeditvar.txt")
-TEMPLATES = {
-	"note": "Note\t",
-	"link": "Link\t\nHeader\t\nCaption\t",
-	"picture": "Link\t\nAltext\t\nCaption\t" }
-
-def attr_escape(string):
-	return (base_escape(string)
-		.replace('"', "&quot;")
-		.replace("'", "&apos;"))
-
-def base_escape(string):
-	return (string
-		.replace("&", "&amp;")
-		.replace("<", "&lt;")
-		.replace(">", "&gt;"))
-
-def editvar(var=""):
-	with open(TMP_PATH, "w") as fil:
-		fil.write(var)
-	retcode = subprocess.call([os.environ["EDITOR"] or "vim", TMP_PATH])
-	if retcode != 0:
-		print("Aborted")
-		sys.exit(1)
-	with open(TMP_PATH, "r") as fil:
-		return fil.read()
-
-def splitfields(string):
-	dct = {}
-	for line in string.splitlines():
-		if not line: continue
-		parts = line.split("\t")
-		dct[parts[0]] = "\t".join(parts[1:])
-	return dct
-
-def writefile(thefile, thetree):
-	with open(thefile, "w") as fp:
-		fp.write("<!DOCTYPE html>")
-		fp.write(ET.tostring(thetree, encoding="unicode"))
-		print("Wrote", thefile)
-
-def E(tag, attrs={}, children=[], text=""):
-	elem = ET.Element(tag, attrs)
-	for child in children:
-		elem.append(child)
-	if text:
-		elem.text = text
-	return elem
-
-def post_note():
-	data = splitfields(editvar(TEMPLATES["note"]))
-	timestamp = int(time.time())
-	tgtfile = os.path.join("posts", "notes", str(timestamp) + ".html")
-	tree = E("html",
-		children=[
-			E("head", children=[
-				E("meta", attrs={"name": "timestamp", "content": str(timestamp)})]),
-			E("body", children=[
-				ET.fromstring("<p>%s</p>" % (data["Note"],))])])
-	writefile(tgtfile, tree)
-
-def post_link():
-	data = splitfields(editvar(TEMPLATES["link"]))
-	timestamp = int(time.time())
-	tgtfile = os.path.join("posts", "links", str(timestamp) + ".html")
-	tree = E("html",
-		children=[
-			E("head", children=[
-				E("meta", attrs={"name": "timestamp", "content": str(timestamp)})]),
-			E("body", children=[
-				E("h1", children=[
-					E("a", {"href": attr_escape(data["Link"])}, text=base_escape(data["Header"]))]),
-				ET.fromstring("<p>%s</p>" % (data["Caption"],))])])
-	writefile(tgtfile, tree)
-
-def post_video():
-	data = splitfields(editvar(TEMPLATES["link"]))
-	timestamp = int(time.time())
-	tgtfile = os.path.join("posts", "videos", str(timestamp) + ".html")
-	tree = E("html",
-		children=[
-			E("head", children=[
-				E("meta", attrs={"name": "timestamp", "content": str(timestamp)})]),
-			E("body", children=[
-				E("h1", children=[
-					E("a", {"href": attr_escape(data["Link"])}, text=base_escape(data["Header"]))]),
-				ET.fromstring("<p>%s</p>" % (data["Caption"],))])])
-	writefile(tgtfile, tree)
-
-def post_picture():
-	data = splitfields(editvar(TEMPLATES["picture"]))
-	timestamp = int(time.time())
-	tgtfile = os.path.join("posts", "pictures", str(timestamp) + ".html")
-	tree = E("html",
-		children=[
-			E("head", children=[
-				E("meta", attrs={"name": "timestamp", "content": str(timestamp)})]),
-			E("body", children=[
-				ET.fromstring("<p><a href=\"%s\"><img src=\"%s\" alt=\"%s\"/></a>%s</p>" % ((attr_escape(data["Link"]),) * 2 + (data["Altext"], data["Caption"])))])])
-	writefile(tgtfile, tree)
+def timestamp(): return int(time.time())
 
 def main():
-	choice = ""
-	while True:
-		choice = input("Choose a post type:\n[1] note\n[2] link\n[3] picture\n[4] video\n\n> ")
-		if choice in ("1","2","3","4"): break
-	if choice == "1": post_note()
-	elif choice == "2": post_link()
-	elif choice == "3": post_picture()
-	elif choice == "4": post_video()
+	blurb = sys.stdin.read(-1)
+	obj = {
+		"blurb": blurb,
+		"cdate": timestamp() }
+	pathname = os.path.join("./", "posts", "notes", str(obj["cdate"]) + ".json")
+	with open(pathname, "w") as fp:
+		fp.write(json.dumps(obj))
+		print("wrote", pathname)
+	return 0
 
 if __name__ == "__main__":
-	main()
+	sys.exit(main())
