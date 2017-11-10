@@ -53,9 +53,9 @@ def paginate_index(collection, name="index%s.html", lim=CONF["items"]):
 		items[i]["next"] = items[i + 1]["name"] if i < (len(items)-1) else None
 	return items
 
-def write(path, what):
+def write(path, what, comp=True):
 	with open(path, "w") as fil:
-		fil.write(compactify(what))
+		fil.write(compactify(what) if comp else what)
 
 def compactify(string):
 	string = re.sub(r"\s+", " ", string, flags=re.MULTILINE)
@@ -220,7 +220,7 @@ def main(args):
 		Target(
 			"render/apps/index.html",
 			list(type_filter("App", posts)),
-			lambda path, reqs: write(path, index(reqs))))
+			lambda path, reqs: write(path, index(reqs), False)))
 
 	for tgt in tgts:
 		if force or tgt.makep():
