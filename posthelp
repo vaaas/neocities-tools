@@ -40,7 +40,7 @@ def article(*args):
 	title = content[1].strip() 
 	blurb = content[2].strip()
 	body = content[3].strip()
-	pathname = os.path.join(".", "posts", "articles", name)
+	pathname = os.path.join(".", "posts", "articles", re.sub(r".html$", ".json", name))
 	obj = { "title": title, "blurb": blurb, "body": body, "cdate": timestamp() }
 	write(pathname, json.dumps(obj))
 
