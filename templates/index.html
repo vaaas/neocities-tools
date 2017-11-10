@@ -2,6 +2,9 @@
 {% block body %}
 <body>
 <main>
+<header>
+	<a href="/">{{conf.site}}</a><data value="{{items[0].ctime}}">{{items[0].ctimeymd}}</data>
+</header>
 {% if prev or next %}
 	<nav>
 		{% if prev %}
