@@ -2,19 +2,15 @@
 {% block body %}
 <body>
 <main>
-<header>
-	<a href="/">{{conf.site}}</a><data value="{{items[0].ctime}}">{{items[0].ctimeymd}}</data>
-</header>
-{% if prev or next %}
-	<nav>
-		{% if prev %}
-			<a href="{{prev}}">← Older</a>
-		{% endif %}
-		{% if next %}
-			<a href="{{next}}">Newer →</a>
-		{% endif %}
-	</nav>
-{% endif %}
+<nav>
+	{% if prev %}
+		<a href="{{prev}}">← Older</a>
+	{% endif %}
+	<a href="../">↑ Up</a>
+	{% if next %}
+		<a href="{{next}}">Newer →</a>
+	{% endif %}
+</nav>
 {% for item in items %}
 	<article data-post-type="{{item.type.lower()}}">
 		<header>
