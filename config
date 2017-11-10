@@ -8,7 +8,6 @@
 		{ "title": "Blog", "link": "/" },
 		{ "title": "Articles", "link": "/articles/" },
 		{ "title": "Apps", "link": "/apps/" },
-		{ "title": "Email", "link": "mailto:whiterocket@outlook.com" },
-		{ "title": "XMPP", "link": "xmpp:vaas@xmpp.jp" }
+		{ "title": "About&nbsp;me", "link": "/articles/aboutme.html" }
 	]
 }

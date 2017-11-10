@@ -5,6 +5,7 @@ import os
 import sys
 import json
 import subprocess
+import re
 
 TMPFILE = os.path.join(os.environ["XDG_RUNTIME_DIR"] or "/tmp", "postnoteeditvar.txt")
 RS = chr(30)
