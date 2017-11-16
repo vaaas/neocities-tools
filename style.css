@@ -17,7 +17,7 @@ nav { line-height: 2em; }
 nav > a { margin: 0 1em; }
 article + article {
 	margin-top: 1em;
-	border-top: 1px dashed #aaa;
+	border-top: 1px solid #bbb;
 	padding-top: 1em; }
 #about + main { margin-top: 3em; }
 article h1 {
@@ -25,7 +25,10 @@ article h1 {
 	margin: 0; }
 h1 { margin: 0; }
 data { color: #999; }
-article data { float: right; }
+article data {
+	font-size: 10px;
+	margin: 5px 0 5px 5px;
+	float: right; }
 img {
 	display: block;
 	max-width: 100%; }

@@ -13,13 +13,15 @@
 </nav>
 {% for item in items %}
 	<article data-post-type="{{item.type.lower()}}">
-		<header>
-			<img alt="emoji" class="emoji" src="/pics/{{item.type.lower()}}.svg"/>
-			<strong>{{item.type}}</strong>
-			<data class="date" value="{{item.ctime}}">{{item.ctimeymd}}</data>
-		</header>
+		<data class="date" value="{{item.ctime}}">{{item.ctimeymd}}</data>
 		{% if item.title %}
-			<h1><a href="{{item.href}}">{{item.title}}</a></h1>
+			<h1>
+				{% if item.type != "Note" %}
+					<img alt="emoji" class="emoji" src="/pics/{{item.type.lower()}}.svg"/>
+					<a href="/{{item.type.lower()}}s/">{{item.type}}</a> /
+				{% endif %}
+				<a href="{{item.href}}">{{item.title}}</a>
+			</h1>
 		{% endif %}
 		{{item.blurb}}
 	</article>
