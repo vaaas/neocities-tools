@@ -187,7 +187,7 @@ def main(args):
 	for post in type_filter("App", posts):
 		tpath = htmlext(re.sub(r"^posts/", "render/", post.pathname))
 		tgts.append(Target(tpath, [post],
-			lambda path, reqs: write(path, reqs[0].body)))
+			lambda path, reqs: write(path, reqs[0].body, False)))
 
 	tgts.append(Target(
 		"render/rss.xml",
@@ -220,7 +220,7 @@ def main(args):
 		Target(
 			"render/apps/index.html",
 			list(type_filter("App", posts)),
-			lambda path, reqs: write(path, index(reqs), False)))
+			lambda path, reqs: write(path, index(reqs))))
 
 	for tgt in tgts:
 		if force or tgt.makep():

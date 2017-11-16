@@ -33,7 +33,7 @@ img {
 	display: block;
 	max-width: 100%; }
 body > header, nav, figcaption { text-align: center; }
-body > header { padding: 1em 0; }
+body > header { margin: 1em 0; }
 main article p, ul { margin: 0; }
 .emoji {
 	width: 1em;
