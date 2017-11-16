@@ -27,7 +27,7 @@ h1 { margin: 0; }
 data { color: #999; }
 article data {
 	font-size: 10px;
-	margin: 5px 0 5px 5px;
+	margin: 5px 0 0 10px;
 	float: right; }
 img {
 	display: block;
