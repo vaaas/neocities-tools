@@ -30,6 +30,9 @@ def stamp_to_ymd(timestamp):
 		"%Y-%m-%d",
 		time.gmtime(timestamp))
 
+def stamp_to_year(timestamp):
+	return int(time.strftime("%Y", time.gmtime(timestamp)))
+
 def gen_title(item):
 	return "%s %d" % (item.type, item.ctime)
 
@@ -52,6 +55,23 @@ def paginate_index(collection, name="index%s.html", lim=CONF["items"]):
 		items[i]["prev"] = items[i - 1]["name"] if i > 0 else None
 		items[i]["next"] = items[i + 1]["name"] if i < (len(items)-1) else None
 	return items
+
+"""
+def paginate_index(collection, name="index%s.html"):
+	years = {}
+	for item in collection:
+		year = stamp_to_year(item["ctime"])
+		if not year in years: years[year] = [item]
+		else: years[year].append(item)
+	items = [
+		{"name": name % (str(year),), "items": years[year]}
+		 for year in sorted(years.keys())]
+	items[-1]["name"] = name % ("",)
+	length = len(items)
+	for i in range(length):
+		items[i]["prev"] = items[i - 1]["name"] if i > 0 else None
+		items[i]["next"] = items[i + 1]["name"] if i < length - 1 else None
+"""
 
 def write(path, what, comp=True):
 	with open(path, "w") as fil:
@@ -82,10 +102,11 @@ class Target:
 		self.reqs = reqs
 		self.callback = callback
 
-	def make(self):
+	def make(self, *args):
 		print("‘\033[1m\033[92m" + self.pathname + "\033[0m’" + ":",
 			" ".join([a.pathname for a in self.reqs]))
-		self.callback(self.pathname, self.reqs)
+		for req in self.reqs: req.real_init()
+		self.callback(self.pathname, self.reqs, *args)
 
 	def makep(self):
 		own = (os.path.getmtime(self.pathname)
@@ -102,9 +123,7 @@ class PaginatedTarget(Target):
 		self.next = next
 
 	def make(self):
-		print("‘\033[1m\033[92m" + self.pathname + "\033[0m’" + ":",
-			" ".join([a.pathname for a in self.reqs]))
-		self.callback(self.pathname, self.reqs, self.prev, self.next)
+		super(PaginatedTarget, self).make(self.prev, self.next)
 
 class Post:
 	type = None
@@ -117,6 +136,9 @@ class Post:
 		self.ctime = data["cdate"]
 		self.ctimeymd = stamp_to_ymd(self.ctime)
 		self.ctimerfc = stamp_to_rfc822(self.ctime)
+
+	def real_init (self):
+		data = json.load(open(self.pathname, "r"))
 		self.title = dget(data, "title")
 		self.gentitle = None if self.title else gen_title(self)
 		self.guid = self.href or gen_uri(self)
