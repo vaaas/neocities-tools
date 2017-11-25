@@ -8,6 +8,8 @@
 		{ "title": "Blog", "link": "/" },
 		{ "title": "Articles", "link": "/articles/" },
 		{ "title": "Apps", "link": "/apps/" },
-		{ "title": "About&nbsp;me", "link": "/articles/aboutme.html" }
+		{ "title": "About&nbsp;me", "link": "/articles/aboutme.html" },
+		{ "title": "Devices", "link": "/articles/devices.html" },
+		{ "title": "Testimonials", "link": "/articles/testimonials.html" }
 	]
 }

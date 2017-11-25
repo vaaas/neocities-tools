@@ -54,3 +54,9 @@ iframe { display: block; }
 	white-space: nowrap;
 	overflow: auto; }
 .slide > * { display: inline-block; }
+footer {
+	border-top: 1px solid #bbb;
+	margin-top: 0.5em;
+	padding-top: 0.5em;
+	text-align: center;
+	font-style: oblique; }
