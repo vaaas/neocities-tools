@@ -50,7 +50,7 @@ def paginate_index(collection, name="index%s.html", lim=CONF["items"]):
 			"name": name % (str(i*lim,)),
 			"items": collection[i*lim:(i+1)*lim]})
 	items[-1]["name"] = name % ("",)
-        length = len(items)
+	length = len(items)
 	for i in range(length):
 		items[i]["prev"] = items[i - 1]["name"] if i > 0 else None
 		items[i]["next"] = items[i + 1]["name"] if i < length-1 else None
@@ -141,9 +141,10 @@ class Post:
 		data = json.load(open(self.pathname, "r"))
 		self.title = dget(data, "title")
 		self.gentitle = None if self.title else gen_title(self)
-		self.guid = self.href or gen_uri(self)
+		self.guid = self.href if self.href != "/" else gen_uri(self)
 		self.blurb = data["blurb"]
 		self.body = dget(data, "body")
+		self.head = dget(data, "head")
 
 class Article(Post):
 	type = "Article"
@@ -217,7 +218,7 @@ def main(args):
 		lambda path, reqs: write(path, rss(reqs))))
 
 	slices = paginate_index(posts, "/index%s.html")
-        if len(slices) >= 2: slices[-2]["next"] = "/"
+	if len(slices) >= 2: slices[-2]["next"] = "/"
 	for i in slices[:-1]:
 		tgts.append(PaginatedTarget(
 			"render"+i["name"],

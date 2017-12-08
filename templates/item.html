@@ -1,4 +1,9 @@
 {% extends "base.html" %}
+{% block head %}
+{% if item["head"] %}
+	{{item["head"]}}
+{% endif %}
+{% endblock %}
 {% block body %}
 <body>
 <header>

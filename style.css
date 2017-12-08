@@ -1,7 +1,7 @@
 html {
 	background-position: center top;
 	background-attachment: fixed;
-	background-image: url("pics/texture.png"); }
+	background-image: url("/pics/texture.png"); }
 body {
 	margin: auto;
 	padding: 10px;
@@ -60,3 +60,11 @@ footer {
 	padding-top: 0.5em;
 	text-align: center;
 	font-style: oblique; }
+hr {
+	border: none;
+	border-top: 1px solid #bbb; }
+blockquote {
+	padding-left: 1em;
+	margin-left: 1em;
+	border-left: 1px solid #bbb; }
+code { white-space: normal; }

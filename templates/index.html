@@ -12,7 +12,7 @@
 	{% endif %}
 </nav>
 {% for item in items %}
-	<article data-post-type="{{item.type.lower()}}">
+	<article>
 		<data class="date" value="{{item.ctime}}">{{item.ctimeymd}}</data>
 		{% if item.title %}
 			<h1>
