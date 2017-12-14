@@ -1,254 +1,170 @@
 #!/usr/bin/env python3
-
 import sys
 import os
-import re
 import time
 import json
-from glob import glob
-from jinja2 import Environment, FileSystemLoader
 
-TPL = Environment(loader=FileSystemLoader("templates"))
-CONF = json.load(open("config", "r"))
-CONF["about"] = open("about.html").read()
+RS = chr(30)
 
-def type_filter(thetype, thestuff):
-	return filter(lambda x: x.type is thetype, thestuff)
+CONF = json.loads(open("config").read())
 
 def dget(dct, key): return dct[key] if key in dct else None
-
-def now():
-	return time.strftime("%a, %d %b %Y %H:%M:%S +0000")
-
-def stamp_to_rfc822(timestamp):
-	return time.strftime(
-		"%a, %d %b %Y %H:%M:%S +0000",
-		time.gmtime(timestamp))
 
 def stamp_to_ymd(timestamp):
 	return time.strftime(
 		"%Y-%m-%d",
-		time.gmtime(timestamp))
+		time.gmtime(int(timestamp)))
 
-def stamp_to_year(timestamp):
-	return int(time.strftime("%Y", time.gmtime(timestamp)))
+def stamp_to_rfc(timestamp):
+	return time.strftime(
+		"%a, %d %b %Y %H:%M:%S +0000",
+		time.gmtime(int(timestamp)))
 
-def gen_title(item):
-	return "%s %d" % (item.type, item.ctime)
+def item_stream(fp, block_size=2048):
+	data = fp.read(block_size)
+	while True:
+		idx = data.find(RS, 1)
+		if idx == -1:
+			chunk = fp.read(block_size)
+			if chunk == "": break
+			else: data += chunk
+		else:
+			yield data[:idx]
+			data = data[idx:]
+	if (data != ""): yield data
 
-def gen_uri(item):
-	return ("%s/%d" % (item.type, item.ctime))
+def itemnum(fp, block_size=2048):
+	counter = 0
+	while True:
+		chunk = fp.read(block_size)
+		counter += chunk.count(RS)
+		if len(chunk) == 0: return counter
 
-def htmlext(string):
-	return re.sub(r".json$", ".html", string)
-
-def paginate_index(collection, name="index%s.html", lim=CONF["items"]):
-	div, mod = divmod(len(collection), lim)
-	items = []
-	for i in range(div if mod == 0 else div+1):
-		items.append({
-			"name": name % (str(i*lim,)),
-			"items": collection[i*lim:(i+1)*lim]})
-	items[-1]["name"] = name % ("",)
-	length = len(items)
-	for i in range(length):
-		items[i]["prev"] = items[i - 1]["name"] if i > 0 else None
-		items[i]["next"] = items[i + 1]["name"] if i < length-1 else None
-	return items
-
-"""
-def paginate_index(collection, name="index%s.html"):
-	years = {}
-	for item in collection:
-		year = stamp_to_year(item["ctime"])
-		if not year in years: years[year] = [item]
-		else: years[year].append(item)
-	items = [
-		{"name": name % (str(year),), "items": years[year]}
-		 for year in sorted(years.keys())]
-	items[-1]["name"] = name % ("",)
-	length = len(items)
-	for i in range(length):
-		items[i]["prev"] = items[i - 1]["name"] if i > 0 else None
-		items[i]["next"] = items[i + 1]["name"] if i < length - 1 else None
-"""
-
-def write(path, what, comp=True):
-	with open(path, "w") as fil:
-		fil.write(compactify(what) if comp else what)
-
-def compactify(string):
-	string = re.sub(r"\s+", " ", string, flags=re.MULTILINE)
-	return string
-
-def tostring(tree):
-	return ET.tostring(tree, encoding="unicode", method="xml")
-
-def econtents(elem):
-	string = tostring(elem)
-	length = len("<%s>" % (elem.tag,))
-	start = string.find("<%s>" % (elem.tag,))
-	end = string.rfind("</%s>" % (elem.tag,))
-	return string[start+length:end]
-
-def html_escape(string):
-	return (string.replace("&", "&amp;")
-		.replace("<", "&lt;")
-		.replace(">", "&gt;"))
+def parse (item):
+	timestamp, ptype, content = item.strip().split("\n", 2)
+	return {"timestamp": timestamp, "type": ptype, "content": content }
 
 class Target:
-	def __init__(self, pathname, reqs, callback):
+	def __init__ (self, pathname, dependencies, callback, *args, **kwargs):
 		self.pathname = pathname
-		self.reqs = reqs
+		self.dependencies = dependencies
 		self.callback = callback
-
-	def make(self, *args):
-		print("‘\033[1m\033[92m" + self.pathname + "\033[0m’" + ":",
-			" ".join([a.pathname for a in self.reqs]))
-		for req in self.reqs: req.real_init()
-		self.callback(self.pathname, self.reqs, *args)
+		self.args = args
+		self.kwargs = kwargs
 
 	def makep(self):
-		own = (os.path.getmtime(self.pathname)
-			if os.path.isfile(self.pathname) else -1)
-		others = [a.mtime for a in self.reqs]
-		others.sort()
-		return own < others[-1]
+		own = (os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1)
+		others = max(map(lambda x: int(x["timestamp"]), self.dependencies))
+		return own < others
 
-class PaginatedTarget(Target):
-	def __init__(self, pathname, reqs, prev, next, callback):
-		super(PaginatedTarget, self).__init__(pathname, reqs, callback)
-		self.reqs = reqs
-		self.prev = prev
-		self.next = next
+	def make(self, force):
+		if force or self.makep():
+			print("Making \033[1m\033[92m%s\033[0m" % (self.pathname,))
+			self.callback(self.pathname, self.dependencies, *self.args, **self.kwargs)
 
-	def make(self):
-		super(PaginatedTarget, self).make(self.prev, self.next)
+def ranges(n, lim=CONF["items"]):
+	c = 0
+	while n > 0:
+		if n > lim+10:
+			yield range(c*lim, (c+1)*lim)
+			c += 1
+			n -= lim
+		else:
+			yield range(c*lim, c*lim + n)
+			c += 1
+			n = 0
 
-class Post:
-	type = None
-	def __init__ (self, pathname):
-		self.pathname = pathname
-		stat = os.stat(self.pathname)
-		self.mtime = stat.st_mtime
-		self.size = stat.st_size
-		data = json.load(open(self.pathname, "r"))
-		self.ctime = data["cdate"]
-		self.ctimeymd = stamp_to_ymd(self.ctime)
-		self.ctimerfc = stamp_to_rfc822(self.ctime)
+def write(pathname, contents):
+	with open(pathname, "w") as fp:
+		fp.write(contents)
 
-	def real_init (self):
-		data = json.load(open(self.pathname, "r"))
-		self.title = dget(data, "title")
-		self.gentitle = None if self.title else gen_title(self)
-		self.guid = self.href if self.href != "/" else gen_uri(self)
-		self.blurb = data["blurb"]
-		self.body = dget(data, "body")
-		self.head = dget(data, "head")
+def render_frontpage(pathname, items, *args, **kwargs):
+	body = (generate_navhead(dget(kwargs, "previous"), dget(kwargs, "next"), up=False) +
+		"<main>" +
+		"\n".join([render_item(i) for i in items[::-1]]) +
+		"</main>")
+	with open("templates/frontpage.html", "r") as fp: tpl = fp.read(-1)
+	write(pathname, tpl.replace("{{BODY}}", body))
 
-class Article(Post):
-	type = "Article"
-	def __init__(self, pathname):
-		self.href = htmlext(re.sub("^posts/", "/", pathname))
-		super(Article, self).__init__(pathname)
+def render_index(pathname, items, *args, **kwargs):
+	body = (generate_navhead(dget(kwargs, "previous"), dget(kwargs, "next"), up=True) +
+		"<main>" +
+		"\n".join([render_item(i) for i in items[::-1]]) +
+		"</main>")
+	with open("templates/index.html", "r") as fp: tpl = fp.read(-1)
+	write(pathname, tpl.replace("{{BODY}}", body))
 
-class Note(Post):
-	type = "Note"
-	def __init__(self, pathname):
-		self.href = "/"
-		super(Note, self).__init__(pathname)
+def render_item(item):
+	return ("<article><data class=\"date\" value=\"%s\">%s</data>%s</article>" %
+		(item["timestamp"], stamp_to_ymd(item["timestamp"]), item["content"]))
 
-class App(Post):
-	type = "App"
-	def __init__(self, pathname):
-		self.href = htmlext(re.sub("^posts/", "/", pathname))
-		super(App, self).__init__(pathname)
+def render_rss(pathname, items, *args, **kwargs):
+	body = "\n".join([render_item_rss(i) for i in items[::-1]])
+	with open("templates/rss.xml", "r") as fp: tpl = fp.read(-1)
+	write(pathname,
+		tpl
+			.replace("{{PUBDATE}}", stamp_to_rfc(items[-1]["timestamp"]))
+			.replace("{{BODY}}", body))
 
-def selector(string):
-	part = string.split("/")[1]
-	return {
-		"articles": Article,
-		"notes": Note,
-		"apps": App}[part]
+def render_item_rss(item):
+	return ("<item>" +
+		"<guid>post/%s</guid>" % (item["timestamp"],) +
+		"<pubDate>%s</pubDate>" % (stamp_to_rfc(item["timestamp"]),) +
+		"<description><![CDATA[%s]]></description>" % (item["content"],) +
+		"</item>")
 
-def item(post):
-	template = TPL.get_template("item.html")
-	return template.render(conf=CONF, item=post,
-		title=post.title, date=stamp_to_rfc822(post.ctime))
+def generate_navhead(previous, next, up=False):
+	return ("<nav>" +
+		("<a href=\"%s\">← Previous</a>" % (previous,) if previous else "") +
+		("<a href=\"../\">↑ Up</a>" if up else "") +
+		("<a href=\"%s\">Next →</a>" % (next,) if next else "") +
+		"</nav>")
 
-def index(posts, prev=None, next=None):
-	posts.reverse()
-	template = TPL.get_template("index.html")
-	return template.render(conf=CONF, items=posts,
-		title=CONF["site"], date=now(),
-		prev=prev, next=next)
+def main(pathname, args):
+	force= False
+	if len(args) > 0 and args[0] == "-f": force = True
+	
+	fp = open(pathname, "r")
+	articles = []
+	apps = []
 
-def frontpage(posts, prev=None, next=None):
-	posts.reverse()
-	template = TPL.get_template("frontpage.html")
-	return template.render(conf=CONF, items=posts,
-		title=CONF["site"], date=now(),
-		prev=prev, next=next)
+	rngs = []
+	for r in ranges(itemnum(fp)):
+		rngs.append({"name": "index%s.html" % (str(r.start),), "range": r})
+	rngs[-1]["name"] = "index.html"
+	for i in range(len(rngs)-1):
+		rngs[i]["next"] = rngs[i+1]["name"]
+	rngs[-1]["next"] = None
+	for i in range(len(rngs)-1, 0, -1):
+		rngs[i]["previous"] = rngs[i-1]["name"]
+	rngs[0]["previous"] = None
 
-def rss(articles):
-	articles.reverse()
-	template = TPL.get_template("rss.xml")
-	return template.render(conf=CONF, items=articles, now=now())
-
-def main(args):
-	force = len(args) > 0 and args[0] == "-f"
-
-	posts = [selector(i)(i) for i in glob("posts/**/*json", recursive=True)]
-	posts.sort(key=lambda x: x.ctime)
-	tgts = []
-
-	for post in type_filter("Article", posts):
-		tpath = htmlext(re.sub(r"^posts/", "render/", post.pathname))
-		tgts.append(Target(tpath, [post],
-			lambda path, reqs: write(path, item(reqs[0]))))
-
-	for post in type_filter("App", posts):
-		tpath = htmlext(re.sub(r"^posts/", "render/", post.pathname))
-		tgts.append(Target(tpath, [post],
-			lambda path, reqs: write(path, reqs[0].body, False)))
-
-	tgts.append(Target(
-		"render/rss.xml",
-		posts[-CONF["items"]:],
-		lambda path, reqs: write(path, rss(reqs))))
-
-	slices = paginate_index(posts, "/index%s.html")
-	if len(slices) >= 2: slices[-2]["next"] = "/"
-	for i in slices[:-1]:
-		tgts.append(PaginatedTarget(
-			"render"+i["name"],
-			i["items"],
-			i["prev"], i["next"],
-			lambda path, reqs, p, n:
-				write(path, index(reqs, p, n))))
-
-	i = slices[-1]
-	tgts.append(PaginatedTarget(
-		"render"+i["name"],
-		i["items"],
-		i["prev"], i["next"],
-		lambda path, reqs, p, n:
-			write(path, frontpage(reqs, p, n))))
-
-	tgts.append(
-		Target(
-			"render/articles/index.html",
-			list(type_filter("Article", posts)),
-			lambda path, reqs: write(path, index(reqs))))
-	tgts.append(
-		Target(
-			"render/apps/index.html",
-			list(type_filter("App", posts)),
-			lambda path, reqs: write(path, index(reqs))))
-
-	for tgt in tgts:
-		if force or tgt.makep():
-			tgt.make()
+	i = 0
+	c = 0
+	lst = []
+	fp.seek(0)
+	for item in item_stream(fp):
+		c += 1
+		item = parse(item)
+		if item["type"] == "article": articles.append(item)
+		elif item["type"] == "app": apps.append(item)
+		lst.append(item)
+		if not c in rngs[i]["range"]:
+			if rngs[i]["name"] is "index.html":
+				Target("render/"+rngs[i]["name"], tuple(lst), render_frontpage,
+				       next=rngs[i]["next"], previous=rngs[i]["previous"]).make(force)
+				Target("render/"+"rss.xml", tuple(lst[:10]), render_rss).make(force)
+			else:
+				Target("render/"+rngs[i]["name"], tuple(lst), render_index,
+					next=rngs[i]["next"], previous=rngs[i]["previous"]).make(force)
+			lst.clear()
+			i += 1
+	fp.close()
+	del rngs,i,c,lst,item,fp
+	if len(articles) > 0:
+		Target("render/articles/index.html", articles, render_index).make(force)
+	if len(apps) > 0:
+		Target("render/apps/index.html", apps, render_index).make(force)
 
 if __name__ == "__main__":
-	sys.exit(main(sys.argv[1:]))
+	main("posts", sys.argv[1:])

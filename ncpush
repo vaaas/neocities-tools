@@ -4,6 +4,8 @@ import os
 import json
 import subprocess
 
+CONF=json.loads(open("config").read())
+
 def byebye(string):
 	print(string)
 	sys.exit(1)
@@ -60,7 +62,8 @@ def main():
 		os.chdir(sys.argv[1])
 	elif os.path.isdir("render"):
 		os.chdir("render")
-	user = input("Username: ")
+	user = CONF["sitename"]
+	print("Sitename is", user)
 	password = input("Password: ")
 	remove, add = diffs(remote(user, password), local_files())
 	if remove:

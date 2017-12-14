@@ -1,42 +1,71 @@
 #!/usr/bin/env python3
 
 import time
-import os
 import sys
-import json
+import os
 import re
+
+RS = chr(30)
+PATHNAME="posts"
 
 def timestamp(): return int(time.time())
 
-def write(pathname, what):
-	with open(pathname, "w") as fp:
+def append(what):
+	with open(PATHNAME, "a") as fp:
 		fp.write(what)
-	print("Wrote", pathname)
+	print("Appended")
+	return 0
+
+def postsegment(timestamp, type, content):
+	return "\n".join((RS, timestamp, type, content, ""))
+
+def path_to_href(pathname):
+	href = pathname.split("/")
+	if href[0] == ".": href.pop(0)
+	href[0].pop(0)
+	return "/".join([""]+href)
+
+def articleheader(pathname, title):
+	href = path_to_href(pathname)
+	return ("<img class=\"emoji\" alt=\"emoji\" src=\"/pics/article.svg\"/>" +
+		"<a href=\"/articles\">Articles</a>" +
+		("<a href=\"%s\">%s</a>" % (href, title)))
+
+def appheader(pathname, title):
+	href = path_to_href(pathname)
+	return ("<img class=\"emoji\" alt=\"emoji\" src=\"/pics/app.svg\"/>" +
+		"<a href=\"/articles\">Apps</a>" +
+		("<a href=\"%s\">%s</a>" % (href, title)))
 
 def note(*args):
 	print("Type your note (ends at EOF)\n")
 	content = sys.stdin.read(-1).strip()
-	obj = { "cdate": timestamp(), "blurb": content }
-	pathname = os.path.join(".", "posts", "notes", str(obj["cdate"]) + ".json")
-	write(pathname, json.dumps(obj))
+	stamp = str(timestamp())
+	return append(postsegment(stamp, "note", content))
 
-def article(*args):
-	name = input("File name > ").strip()
-	title = input("Title > ").strip()
-	blurb = input("Blurb > ").strip()
-	print("Body (ends at EOF)\n")
-	body = sys.stdin.read(-1).strip()
-	pathname = os.path.join(".", "posts", "articles", re.sub(r".html$", ".json", name))
-	obj = { "title": title, "blurb": blurb, "body": body, "cdate": timestamp() }
-	write(pathname, json.dumps(obj))
+def article(pathname, *args):
+	with open(pathname, "r") as fp: text = fp.read(-1)
+	title = re.search("<title>([^<]+)</title>", text).group(0)
+	blurb = re.search("<p>(.+?)</p>", text).group(0)
+	timestamp = re.search("meta name=\"timestamp\" content=\"([^\"]+)\"", text).group(0)
+	content = articleheader(pathname, title) + "\n" + blurb
+	append(postsegment(timestamp, "article", content))
+
+def app(pathname, *args)
+	with open(pathname, "r") as fp: text = fp.read(-1)
+	title = re.search("<title>([^<]+)</title>", text).group(0)
+	timestamp = re.search("meta name=\"timestamp\" content=\"([^\"]+)\"", text).group(0)
+	blurb = re.search("meta name=\"description\" content=\"([^\"]+)\"", text).group(0)
+	content = appheader(pathname, title) + "\n" + blurb
+	append(postsegment(timestamp, "app", content)
 
 def main():
-	FNS = {"a": article, "n": note}
+	FNS = {"n": note, "a": article}
 	answer = ""
 	while True:
-		answer = input("Select post type:\n\t(n)ote\n\t(a)rticle\n> ")
-		if answer in ("n", "a"): break
-	return FNS[answer.strip()](sys.argv[1:])
+		answer = input("Select post type:\n\t(n)ote\n> ")
+		if answer in FNS: break
+	return FNS[answer.strip()](*sys.argv[1:])
 
 if __name__ == "__main__":
 	sys.exit(main())

@@ -1,47 +1,32 @@
-{% extends "base.html" %} 
-{% block body %}
+<!DOCTYPE html>
+<html lang="en-gb">
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	<meta name="url" content="https://vas.neocities.org"/>
+	<meta name="author" content="Vas"/>
+	<meta name="description" content="A blog on technology, nerddom, and politics. Intentionally edgy; don't take things too seriously."/>
+	<link rel="stylesheet" href="/style.css"/>
+	<link rel="icon" href="/favicon.ico?v=2"/>
+	<link rel="alternate" href="/rss.xml" type="application/rss+xml"/>
+	<title>Vas' Website</title>
+</head>
 <body id="frontpage">
 <a href="/"><img alt="website banner" id="banner" src="/pics/xmas2017banner.jpg"/></a>
 <header>
-	<h1>{{conf["site"]}} <a href="/rss.xml"><img class="emoji" src="/pics/feed-icon.svg" alt="feed icon"/></a></h1>
-	{% if conf["links"] %}
-		<nav>
-			{% for item in conf["links"] %}
-				<a href="{{item.link}}">{{item.title}}</a>
-			{% endfor %}
-		</nav>
-	{% endif %}
+	<h1>Vas' Website <a href="/rss.xml"><img class="emoji" src="/pics/feed-icon.svg" alt="feed icon"/></a></h1>
+	<nav>
+		<a href="/articles/">Articles</a>
+		<a href="/apps/">Apps</a>
+		<a href="/articles/aboutme.html">About&nbsp;me</a>
+		<a href="/articles/devices.html">Devices</a>
+		<a href="/articles/testimonials.html">Testimonials</a>
+	</nav>
 </header>
 <section id="about">
-	{{conf["about"]}}
+	Hello, world. I am Vas, and this is my private playground on the web, courtesy of <a href="https://neocities.org">Neocities</a>. I'm a little edgelord over here, so don't take it too seriously.
 </section>
-<main>
-{% if prev or next %}
-	<nav>
-		{% if prev %}
-			<a href="{{prev}}">← Older</a>
-		{% endif %}
-		{% if next %}
-			<a href="{{next}}">Newer →</a>
-		{% endif %}
-	</nav>
-{% endif %}
-{% for item in items %}
-	<article>
-		<data class="date" value="{{item.ctime}}">{{item.ctimeymd}}</data>
-		{% if item.title %}
-			<h1>
-				{% if item.type != "Note" %}
-					<img alt="emoji" class="emoji" src="/pics/{{item.type.lower()}}.svg"/>
-					<a href="/{{item.type.lower()}}s/">{{item.type}}</a> /
-				{% endif %}
-				<a href="{{item.href}}">{{item.title}}</a>
-			</h1>
-		{% endif %}
-		{{item.blurb}}
-	</article>
-{% endfor %}
-</main>
-{% include 'footer.html' %}
+{{BODY}}
+<footer>There are no comments yet, but you can <a href="/articles/aboutme.html">get in touch through email and XMPP</a></footer>
 </body>
-{% endblock %}
+</html>

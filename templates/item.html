@@ -1,15 +1,21 @@
-{% extends "base.html" %}
-{% block head %}
-{% if item["head"] %}
-	{{item["head"]}}
-{% endif %}
-{% endblock %}
-{% block body %}
+<!DOCTYPE html>
+<html lang="en-gb">
+<head>
+	<meta charset="utf-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	<meta name="url" content="https://vas.neocities.org"/>
+	<meta name="author" content="Vas"/>
+	<meta name="description" content="A blog on technology, nerddom, and politics. Intentionally edgy; don't take things too seriously."/>
+	<link rel="stylesheet" href="/style.css"/>
+	<link rel="icon" href="/favicon.ico?v=2"/>
+	<link rel="alternate" href="/rss.xml" type="application/rss+xml"/>
+	<title>{{TITLE}}</title>
+</head>
 <body>
 <header>
-	<a href="/">{{conf.site}}</a> — <data value="{{item.ctime}}">{{item.ctimeymd}}</data>
+	<a href="/">Vas' Website</a> — <data value="{{TIMESTAMP}}">{{YMD}}</data>
 </header>
-{{item.body}}
-{% include 'footer.html' %}
+{{BODY}}
+<footer>There are no comments yet, but you can <a href="/articles/aboutme.html">get in touch through email and XMPP</a></footer>
 </body>
-{% endblock %}
+</html>
