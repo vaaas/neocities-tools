@@ -153,7 +153,7 @@ def main(pathname, args):
 			if rngs[i]["name"] is "index.html":
 				Target("render/"+rngs[i]["name"], tuple(lst), render_frontpage,
 				       next=rngs[i]["next"], previous=rngs[i]["previous"]).make(force)
-				Target("render/"+"rss.xml", tuple(lst[:10]), render_rss).make(force)
+				Target("render/"+"rss.xml", tuple(lst[-10:]), render_rss).make(force)
 			else:
 				Target("render/"+rngs[i]["name"], tuple(lst), render_index,
 					next=rngs[i]["next"], previous=rngs[i]["previous"]).make(force)

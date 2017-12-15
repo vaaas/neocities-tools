@@ -16,20 +16,22 @@ def append(what):
 	print("Appended")
 	return 0
 
-def postsegment(timestamp, type, content):
-	return "\n".join((RS, timestamp, type, content, ""))
+def postsegment(*args):
+	return RS + "\n".join(args) + "\n\n"
 
 def path_to_href(pathname):
 	href = pathname.split("/")
 	if href[0] == ".": href.pop(0)
-	href[0].pop(0)
+	href.pop(0)
 	return "/".join([""]+href)
 
 def articleheader(pathname, title):
 	href = path_to_href(pathname)
-	return ("<img class=\"emoji\" alt=\"emoji\" src=\"/pics/article.svg\"/>" +
-		"<a href=\"/articles\">Articles</a>" +
-		("<a href=\"%s\">%s</a>" % (href, title)))
+	return ("<h1>" +
+		"<img class=\"emoji\" alt=\"emoji\" src=\"/pics/article.svg\"/> " +
+		"<a href=\"/articles\">Articles</a> / " +
+		("<a href=\"%s\">%s</a>" % (href, title)) +
+		"</h1>")
 
 def appheader(pathname, title):
 	href = path_to_href(pathname)
@@ -45,25 +47,25 @@ def note(*args):
 
 def article(pathname, *args):
 	with open(pathname, "r") as fp: text = fp.read(-1)
-	title = re.search("<title>([^<]+)</title>", text).group(0)
-	blurb = re.search("<p>(.+?)</p>", text).group(0)
-	timestamp = re.search("meta name=\"timestamp\" content=\"([^\"]+)\"", text).group(0)
+	title = re.search("<title>([^<]+)</title>", text).group(1)
+	blurb = re.search("<p>(.+?)</p>", text).group(1)
+	timestamp = re.search("<data value=\"([^\"]+)\"", text).group(1)
 	content = articleheader(pathname, title) + "\n" + blurb
 	append(postsegment(timestamp, "article", content))
 
-def app(pathname, *args)
+def app(pathname, *args):
 	with open(pathname, "r") as fp: text = fp.read(-1)
 	title = re.search("<title>([^<]+)</title>", text).group(0)
-	timestamp = re.search("meta name=\"timestamp\" content=\"([^\"]+)\"", text).group(0)
-	blurb = re.search("meta name=\"description\" content=\"([^\"]+)\"", text).group(0)
+	timestamp = re.search("meta name=\"timestamp\" content=\"([^\"]+)\"", text).group(1)
+	blurb = re.search("meta name=\"description\" content=\"([^\"]+)\"", text).group(1)
 	content = appheader(pathname, title) + "\n" + blurb
-	append(postsegment(timestamp, "app", content)
+	append(postsegment(timestamp, "app", content))
 
 def main():
-	FNS = {"n": note, "a": article}
+	FNS = {"n": note, "a": article, "p": app}
 	answer = ""
 	while True:
-		answer = input("Select post type:\n\t(n)ote\n> ")
+		answer = input("Select post type:\n\t(n)ote\n\t(a)rticle\n\tap(p)\n> ")
 		if answer in FNS: break
 	return FNS[answer.strip()](*sys.argv[1:])
 

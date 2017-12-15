@@ -19,7 +19,7 @@ article + article {
 	margin-top: 1em;
 	border-top: 1px solid #bbb;
 	padding-top: 1em; }
-#about + main { margin-top: 3em; }
+#about { margin-bottom: 3em; }
 article h1 {
 	font-size: 100%;
 	margin: 0; }
