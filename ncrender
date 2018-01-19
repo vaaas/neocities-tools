@@ -111,6 +111,7 @@ def render_item_rss(item):
 		"<guid>post/%s</guid>" % (item["timestamp"],) +
 		"<pubDate>%s</pubDate>" % (stamp_to_rfc(item["timestamp"]),) +
 		"<description><![CDATA[%s]]></description>" % (item["content"],) +
+		"<link>/</link>" +
 		"</item>")
 
 def generate_navhead(previous, next, up=False):
