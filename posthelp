@@ -35,9 +35,19 @@ def articleheader(pathname, title):
 
 def appheader(pathname, title):
 	href = path_to_href(pathname)
-	return ("<img class=\"emoji\" alt=\"emoji\" src=\"/pics/app.svg\"/>" +
+	return ("<h1>" +
+		"<img class=\"emoji\" alt=\"emoji\" src=\"/pics/app.svg\"/>" +
 		"<a href=\"/articles\">Apps</a>" +
-		("<a href=\"%s\">%s</a>" % (href, title)))
+		("<a href=\"%s\">%s</a>" % (href, title)) +
+		"</h1>")
+
+def storyheader(pathname, title):
+	href = path_to_href(pathname)
+	return ("<h1>" +
+		"<img class=\"emoji\" alt=\"emoji\" src=\"/pics/story.svg\"/>" +
+		"<a href=\"/stories\">Stories</a>" +
+		("<a href=\"%s\">%s</a>" % (href, title)) +
+		"</h1>")
 
 def note(*args):
 	print("Type your note (ends at EOF)\n")
@@ -57,15 +67,23 @@ def app(pathname, *args):
 	with open(pathname, "r") as fp: text = fp.read(-1)
 	title = re.search("<title>([^<]+)</title>", text).group(0)
 	timestamp = re.search("meta name=\"timestamp\" content=\"([^\"]+)\"", text).group(1)
-	blurb = re.search("meta name=\"description\" content=\"([^\"]+)\"", text).group(1)
+	blurb = re.search("<p>(.+?)</p>", text).group(1)
 	content = appheader(pathname, title) + "\n" + blurb
 	append(postsegment(timestamp, "app", content))
 
+def story(pathname, args):
+	with open(pathname, "r") as fp: text = fp.read(-1)
+	title = re.search("<title>([^<]+)</title>", text).group(0)
+	timestamp = re.search("meta name=\"timestamp\" content=\"([^\"]+)\"", text).group(1)
+	blurb = re.search("<p>(.+?)</p>", text).group(1)
+	content = storyheader(pathname, title) + "\n" + blurb
+	append(postsegment(timestamp, "story", content))
+
 def main():
-	FNS = {"n": note, "a": article, "p": app}
+	FNS = {"n": note, "a": article, "p": app, "s": story}
 	answer = ""
 	while True:
-		answer = input("Select post type:\n\t(n)ote\n\t(a)rticle\n\tap(p)\n> ")
+		answer = input("Select post type:\n\t(n)ote\n\t(a)rticle\n\tap(p)\n\t(s)tory\n> ")
 		if answer in FNS: break
 	return FNS[answer.strip()](*sys.argv[1:])
 
