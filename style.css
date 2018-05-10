@@ -39,7 +39,7 @@ main article p, ul { margin: 0; }
 .emoji {
 	width: 1em;
 	display: inline; }
-#banner {
+.fullwidth {
 	margin: 0 -10px;
 	max-width: calc(20px + 100%); }
 figure { margin: auto; }

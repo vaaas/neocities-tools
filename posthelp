@@ -36,16 +36,16 @@ def articleheader(pathname, title):
 def appheader(pathname, title):
 	href = path_to_href(pathname)
 	return ("<h1>" +
-		"<img class=\"emoji\" alt=\"emoji\" src=\"/pics/app.svg\"/>" +
-		"<a href=\"/articles\">Apps</a>" +
+		"<img class=\"emoji\" alt=\"emoji\" src=\"/pics/app.svg\"/> " +
+		"<a href=\"/articles\">Apps</a> / " +
 		("<a href=\"%s\">%s</a>" % (href, title)) +
 		"</h1>")
 
 def storyheader(pathname, title):
 	href = path_to_href(pathname)
 	return ("<h1>" +
-		"<img class=\"emoji\" alt=\"emoji\" src=\"/pics/story.svg\"/>" +
-		"<a href=\"/stories\">Stories</a>" +
+		"<img class=\"emoji\" alt=\"emoji\" src=\"/pics/story.svg\"/> " +
+		"<a href=\"/stories\">Stories</a> / " +
 		("<a href=\"%s\">%s</a>" % (href, title)) +
 		"</h1>")
 
@@ -71,10 +71,10 @@ def app(pathname, *args):
 	content = appheader(pathname, title) + "\n" + blurb
 	append(postsegment(timestamp, "app", content))
 
-def story(pathname, args):
+def story(pathname, *args):
 	with open(pathname, "r") as fp: text = fp.read(-1)
-	title = re.search("<title>([^<]+)</title>", text).group(0)
-	timestamp = re.search("meta name=\"timestamp\" content=\"([^\"]+)\"", text).group(1)
+	title = re.search("<title>([^<]+)</title>", text).group(1)
+	timestamp = re.search("<data value=\"([^\"]+)\"", text).group(1)
 	blurb = re.search("<p>(.+?)</p>", text).group(1)
 	content = storyheader(pathname, title) + "\n" + blurb
 	append(postsegment(timestamp, "story", content))
