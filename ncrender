@@ -126,10 +126,7 @@ def main(pathname, args):
 	if len(args) > 0 and args[0] == "-f": force = True
 	
 	fp = open(pathname, "r")
-	articles = []
-	apps = []
-	stories = []
-
+        
 	rngs = []
 	for r in ranges(itemnum(fp)):
 		rngs.append({"name": "index%s.html" % (str(r.start),), "range": r})
@@ -148,29 +145,18 @@ def main(pathname, args):
 	for item in item_stream(fp):
 		c += 1
 		item = parse(item)
-		if item["type"] == "article": articles.append(item)
-		elif item["type"] == "app": apps.append(item)
-		elif item["type"] == "story": stories.append(item)
 		lst.append(item)
 		if not c in rngs[i]["range"]:
 			if rngs[i]["name"] is "index.html":
 				Target("render/"+rngs[i]["name"], tuple(lst), render_frontpage,
 				       next=rngs[i]["next"], previous=rngs[i]["previous"]).make(force)
-				Target("render/"+"rss.xml", tuple(lst[-10:]), render_rss).make(force)
+				Target("render/"+"rss.xml", tuple(lst[-100:]), render_rss).make(force)
 			else:
 				Target("render/"+rngs[i]["name"], tuple(lst), render_index,
 					next=rngs[i]["next"], previous=rngs[i]["previous"]).make(force)
 			lst.clear()
 			i += 1
 	fp.close()
-	del rngs,i,c,lst,item,fp
-	if len(articles) > 0:
-		Target("render/articles/index.html", articles, render_index).make(force)
-	if len(apps) > 0:
-		Target("render/apps/index.html", apps, render_index).make(force)
-	if len(stories) > 0:
-		Target("render/stories/index.html", stories, render_index).make(force)
-	del articles,apps,stories
 
 if __name__ == "__main__":
 	main("posts", sys.argv[1:])
