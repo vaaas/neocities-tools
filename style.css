@@ -84,3 +84,5 @@ code { white-space: normal; }
 	margin: 0;
 	color: white;
 	background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.5)); }
+code { white-space: pre-wrap; }
+li { margin-left: 1em; }
