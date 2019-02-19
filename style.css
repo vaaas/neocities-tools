@@ -61,7 +61,7 @@ code { white-space: pre-wrap; }
 .imgtxt {
 	position: relative;
 	margin: 0 -10px; }
-.imgtxt .caption {
+.imgtxt h1, .imgtxt h2, .imgtxt h3 {
 	font-variant: small-caps;
 	line-height: 1em;
 	font-size: 25px;
