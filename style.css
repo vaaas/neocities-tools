@@ -23,8 +23,8 @@ article h1 {
 	font-size: 15px;
 	margin: 0; }
 h1 { margin: 0; }
-data { color: #999; }
-article data {
+.data { color: #999; }
+article .data {
 	font-size: 10px;
 	margin: 5px 0 0 10px;
 	float: right; }

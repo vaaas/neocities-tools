@@ -3,12 +3,37 @@ import sys
 import os
 import time
 import json
+import string
 
 RS = chr(30)
 
 CONF = json.loads(open("config").read())
 
+def absolute_links(string):
+	for i in ["href", "src"]:
+		string = string.replace(
+			'%s="/' % (i,),
+			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
+	return string
+
+def escape(string):
+	return (string
+		.replace("&", "&amp;")
+		.replace("<", "&lt;")
+		.replace(">", "&gt;"))
+
 def dget(dct, key): return dct[key] if key in dct else None
+
+def int_to_base(x, base):
+	digits = string.digits + string.ascii_letters
+	if x == 0: return digits[0]
+	num = []
+	while x:
+		div, mod = divmod(x, base)
+		num.append(digits[mod])
+		x = div
+	num.reverse()
+	return ''.join(num)
 
 def stamp_to_ymd(timestamp):
 	return time.strftime(
@@ -95,8 +120,9 @@ def render_index(pathname, items, *args, **kwargs):
 	write(pathname, tpl.replace("{{BODY}}", body))
 
 def render_item(item):
-	return ("<article><data class=\"date\" value=\"%s\">%s</data>%s</article>" %
-		(item["timestamp"], stamp_to_ymd(item["timestamp"]), item["content"]))
+	guid = int_to_base(int(item["timestamp"]), 62)
+	return ('<article id="%s"><span class="data">%s</span>%s</article>' %
+		(guid, stamp_to_ymd(item["timestamp"]), item["content"]))
 
 def render_rss(pathname, items, *args, **kwargs):
 	body = "\n".join([render_item_rss(i) for i in items[::-1]])
@@ -107,11 +133,13 @@ def render_rss(pathname, items, *args, **kwargs):
 			.replace("{{BODY}}", body))
 
 def render_item_rss(item):
+	guid = int_to_base(int(item["timestamp"]), 62)
 	return ("<item>" +
-		"<guid>post/%s</guid>" % (item["timestamp"],) +
+		"<title>New post on %s (%s)</title>" % (CONF["sitename"], guid) +
+		"<guid isPermaLink=\"false\">post/%s</guid>" % (guid,) +
 		"<pubDate>%s</pubDate>" % (stamp_to_rfc(item["timestamp"]),) +
-		"<description><![CDATA[%s]]></description>" % (item["content"],) +
-		"<link>/</link>" +
+		"<description>%s</description>" % (escape(absolute_links(item["content"])),) +
+		"<link>https://%s.neocities.org/#%s</link>" %(CONF["sitename"], guid) +
 		"</item>")
 
 def generate_navhead(previous, next, up=False):
