@@ -3,6 +3,7 @@ import sys
 import os
 import json
 import subprocess
+from getpass import getpass
 
 CONF=json.loads(open("config").read())
 
@@ -64,7 +65,7 @@ def main():
 		os.chdir("render")
 	user = CONF["sitename"]
 	print("Sitename is", user)
-	password = input("Password: ")
+	password = getpass("Password: ")
 	remove, add = diffs(remote(user, password), local_files())
 	if remove:
 		print("Deleting", ", ".join(remove))
