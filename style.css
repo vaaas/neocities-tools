@@ -6,12 +6,14 @@ body {
 	padding: 10px;
 	max-width: 620px;
 	font-family: sans-serif;
-	font-size: 15px;
+	font-size: 16px;
 	word-wrap: break-word;
 	color: #444;
 	background-color: #eee; }
 body, p, h1, h2, h3, h4, h5, h6 { line-height: 1.5em; }
-a { color: #04a; }
+a
+	{ text-underline-offset: 0.25em;
+	color: #62A; }
 nav { line-height: 2em; }
 nav > a { margin: 0 1em; }
 article + article {
