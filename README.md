@@ -1,17 +1,16 @@
 # Neocities tools
 
-Tools for easing management of a neocities site.
+Tools for easing management of a neocities site. Very lo-fi.
 
-- ```ncpush```: syncs the ```render``` directory by default with neocities, recursively. Takes an optional first argument for the directory to sync.
-- ```ncrender```: a static blog generator. Reads from ```posts``` and outputs to ```render```. Generates an index, an RSS feed, and pages for each article. It tries not to regenerate the entire website every time; use the optional ```-f``` argument to force a full rebuild.
-- ```postnote```: helper script for posting notes (short unstructured posts, like tweets). Uses your default editor (```$EDITOR```), and the format is HTML-like.
+- `ncpush`: syncs the `render` directory by default with neocities, recursively. Takes an optional first argument for the directory to sync.
+- `ncrender`: a static blog generator. Reads from `posts` and outputs to `render`. Generates indices and an RSS feed. It tries not to regenerate the entire website every time; use the optional `-f` argument to force a full rebuild.
+- `posthelp`: helper script for making posts, meant to be used interactively
 
 ## Dependencies
 
 - ```python3```
-- ```lxml``` for parsing XML/XHTML
-- ```jinja2``` for serialising in XML/XHTML
 - ```curl``` for access to neocities. As in the binary ```curl```, not ```libcurl``` or python bindings.
+-  That's all
 
 ## Workflow
 
@@ -21,52 +20,12 @@ The directory structure for a website will look like this. Symlinks are followed
 	├── config
 	├── ncpush
 	├── ncrender
-	├── postnote
-	├── posts <- this is your source directory
-	│   ├── articles
-	│   │   └── your articles go here (if any)
-	│   └── notes
-	│       └── your notes go here (if any)
-	├── render
-	│   └── this is what's uploaded. You can put your JS/CSS/images here too.
-	└── templates
+	├── posthelp
+	├── posts
+	├── render/
+	│   ├── articles/
+	│   ├── index.html
+	│   ├── rss.xml
+	└── templates/
 
-An example:
-
-	> cp ~/Documents/my_nice_article.html ./posts/articles
-	> ./postnote
-		In editor: I'm writing a <strong>great</strong> tweet!
-	> ./ncrender
-	> ./ncpush
-		you will be asked for your credentials
-
-The looks if a website are determined by the templates and your stylesheet. You're supposed to edit the templates if you want something more intricate than the default. All utilities read from the current working directory. Also edit / symlink / copy the config file, which has a few commonly changed variables, such as your URL or your desired name.
-
-## XML format
-
-Files placed in ```posts/articles``` must follow this format:
-
-~~~~
-<!DOCTYPE html>
-<html>
-	<head>
-		<meta name="timestamp" value="SECONDS SINCE EPOCH"/>
-		<title>YOUR TITLE</title>
-	</head>
-	<body>YOUR STUFF</body>
-</html>
-~~~~
-
-And those in ```posts/notes```:
-
-~~~~
-<!DOCTYPE html>
-<html>
-	<head>
-		<meta name="timestamp" value="SECONDS SINCE EPOCH"/>
-	</head>
-	<body>YOUR STUFF</body>
-</html>
-~~~~
-
-```postnote``` will ease posting notes so you need only supply the ```body``` contents. There currently isn't any equivalent for articles.
+Use `posthelp` to create new notes (short, tweet-like) or articles (long-form blog posts). It'll place the files in the right place. Notes, and the title and first paragraph of articles are appended in the `posts` file. Field entries are separated with the ASCII `Record Separator` character and double newlines. `ncrender` will render the new indices and rss feeds if and only if there have been changes, and `ncpush` will push changes to neocities.
