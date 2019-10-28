@@ -166,8 +166,8 @@ def render_rss(pathname, items):
 		tpl = fp.read(-1)
 	write(pathname,
 		tpl
-			.replace("{{PUBDATE}}", stamp_to_rfc(items[-1].timestamp)
-			.replace("{{BODY}}", body)))
+			.replace("{{PUBDATE}}", stamp_to_rfc(items[-1].timestamp))
+			.replace("{{BODY}}", body))
 
 def render_item_rss(item):
 	guid = int_to_base(int(item.timestamp), 62)
