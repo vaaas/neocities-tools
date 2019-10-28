@@ -2,13 +2,13 @@
 
 import time
 import sys
-import os
 import re
 
 RS = chr(30)
-PATHNAME="posts"
+PATHNAME = "posts"
 
-def timestamp(): return int(time.time())
+def timestamp():
+	return int(time.time())
 
 def append(what):
 	with open(PATHNAME, "a") as fp:
@@ -21,7 +21,8 @@ def postsegment(*args):
 
 def path_to_href(pathname):
 	href = pathname.split("/")
-	if href[0] == ".": href.pop(0)
+	if href[0] == ".":
+		href.pop(0)
 	href.pop(0)
 	return "/".join([""]+href)
 
@@ -33,42 +34,44 @@ def articleheader(pathname, title):
 		"</h1>")
 
 def write_article(pathname, text, title, YMD, timestamp):
-        with open("templates/item.html") as fp:
-                tpl = fp.read(-1)
-        tpl = (tpl
-               .replace("{{TITLE}}", title)
-               .replace("{{TIMESTAMP}}", timestamp)
-               .replace("{{YMD}}", YMD)
-               .replace("{{BODY}}", text))
-        with open(pathname, "w") as fp:
-                fp.write(tpl)
-                print()
+	with open("templates/item.html") as fp:
+		tpl = fp.read(-1)
+	tpl = (tpl
+		.replace("{{TITLE}}", title)
+		.replace("{{TIMESTAMP}}", timestamp)
+		.replace("{{YMD}}", YMD)
+		.replace("{{BODY}}", text))
+	with open(pathname, "w") as fp:
+		fp.write(tpl)
+	print()
 
-def note(*args):
+def note():
 	print("Type your note (ends at EOF)\n")
-	content = "<img class=\"emoji\" alt=\"emoji\" src=\"/pics/note.svg\"/> " + sys.stdin.read(-1).strip()
+	content = ("<img class=\"emoji\" alt=\"emoji\" src=\"/pics/note.svg\"/> " +
+		sys.stdin.read(-1).strip())
 	stamp = str(timestamp())
 	return append(postsegment(stamp, "note", content))
 
-def article(*args):
-        name = input("File name: ")
-        pathname = "render/articles/" + name
-        text = sys.stdin.read(-1)
-        title = re.search("<h1>([^<]+)</h1>", text).group(1)
-        blurb = re.search("<p>(.+?)</p>", text).group(1)
-        timestamp = time.strftime("%s")
-        ymd = time.strftime("%Y-%m-%d")
-        content = articleheader(pathname, title) + "\n" + blurb
-        write_article(pathname, text, title, ymd, timestamp)
-        append(postsegment(timestamp, "article", content))
+def article():
+	name = input("File name: ")
+	pathname = "render/articles/" + name
+	text = sys.stdin.read(-1)
+	title = re.search("<h1>([^<]+)</h1>", text).group(1)
+	blurb = re.search("<p>(.+?)</p>", text).group(1)
+	timestamp = time.strftime("%s")
+	ymd = time.strftime("%Y-%m-%d")
+	content = articleheader(pathname, title) + "\n" + blurb
+	write_article(pathname, text, title, ymd, timestamp)
+	append(postsegment(timestamp, "article", content))
 
 def main():
 	FNS = {"n": note, "a": article}
 	answer = ""
 	while True:
 		answer = input("Select post type:\n\t(n)ote\n\t(a)rticle\n> ")
-		if answer in FNS: break
-	return FNS[answer.strip()](*sys.argv[1:])
+		if answer in FNS:
+			break
+	return FNS[answer.strip()]()
 
 if __name__ == "__main__":
 	sys.exit(main())
