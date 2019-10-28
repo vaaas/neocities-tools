@@ -9,24 +9,23 @@ RS = chr(30)
 
 CONF = json.loads(open("config").read())
 
-def absolute_links(string):
+def absolute_links(x):
 	for i in ["href", "src"]:
-		string = string.replace(
+		x = x.replace(
 			'%s="/' % (i,),
 			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
-	return string
+	return x
 
-def escape(string):
-	return (string
+def escape(x):
+	return (x
 		.replace("&", "&amp;")
 		.replace("<", "&lt;")
 		.replace(">", "&gt;"))
 
-def dget(dct, key): return dct[key] if key in dct else None
-
 def int_to_base(x, base):
 	digits = string.digits + string.ascii_letters
-	if x == 0: return digits[0]
+	if x == 0:
+		return digits[0]
 	num = []
 	while x:
 		div, mod = divmod(x, base)
@@ -51,122 +50,150 @@ def item_stream(fp, block_size=2048):
 		idx = data.find(RS, 1)
 		if idx == -1:
 			chunk = fp.read(block_size)
-			if chunk == "": break
+			if chunk == "":
+				break
 			else: data += chunk
 		else:
 			yield data[:idx]
 			data = data[idx:]
-	if (data != ""): yield data
+	if not data == "":
+		yield data
 
 def itemnum(fp, block_size=2048):
 	counter = 0
 	while True:
 		chunk = fp.read(block_size)
 		counter += chunk.count(RS)
-		if len(chunk) == 0: return counter
+		if not chunk:
+			return counter
 
-def parse (item):
-	timestamp, ptype, content = item.strip().split("\n", 2)
-	return {"timestamp": timestamp, "type": ptype, "content": content }
+def parse(item):
+	return Item(*item.strip().split("\n", 2))
 
 class Target:
-	def __init__ (self, pathname, dependencies, callback, *args, **kwargs):
-		self.pathname = pathname
-		self.dependencies = dependencies
-		self.callback = callback
-		self.args = args
-		self.kwargs = kwargs
+	def __init__(self, x):
+		self.pathname = x
+		self.dependencies = []
+		self.callback = None
 
-	def makep(self):
-		own = (os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1)
-		others = max(map(lambda x: int(x["timestamp"]), self.dependencies))
+	def deps(self, x):
+		self.dependencies = x
+		return self
+
+	def cb(self, x):
+		self.callback = x
+		return self
+
+	def youngerp(self):
+		own = os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1
+		others = max(map
+			(lambda x: int(x.timestamp)),
+			self.dependencies)
 		return own < others
 
 	def make(self, force):
-		if force or self.makep():
+		if force or self.youngerp():
 			print("Making \033[1m\033[92m%s\033[0m" % (self.pathname,))
-			self.callback(self.pathname, self.dependencies, *self.args, **self.kwargs)
+			self.callback(self.pathname, self.dependencies)
+
+class Item:
+	def __init__(self, timestamp, ptype, content):
+		self.timestamp = timestamp
+		self.ptype = ptype
+		self.content = content
+
+class RangeList(list):
+	def __init__(self, xs=""):
+		super().__init__()
+		for i in xs:
+			self.add(i)
+
+	def add(self, x):
+		self.append({"name": "index.html", "range": x, "next": None, "previous": None})
+		if len(self) > 1:
+			self[-2]["name"] = "index%s.html" % (str(self[-2]["range"].start))
+			self[-2]["next"] = self[-1]
+			self[-1]["previous"] = self[-2]
 
 def ranges(n, lim=CONF["items"]):
+	lst = RangeList()
 	c = 0
 	while n > 0:
 		if n > lim+10:
-			yield range(c*lim, (c+1)*lim)
+			lst.add(range(c*lim, (c+1)*lim))
 			c += 1
 			n -= lim
 		else:
-			yield range(c*lim, c*lim + n)
+			lst.add(range(c*lim, c*lim + n))
 			c += 1
 			n = 0
+	return lst
 
 def write(pathname, contents):
 	with open(pathname, "w") as fp:
 		fp.write(contents)
 
-def render_frontpage(pathname, items, *args, **kwargs):
-	body = (generate_navhead(dget(kwargs, "previous"), dget(kwargs, "next"), up=False) +
-		"<main>" +
-		"\n".join([render_item(i) for i in items[::-1]]) +
-		"</main>")
-	with open("templates/frontpage.html", "r") as fp: tpl = fp.read(-1)
-	write(pathname, tpl.replace("{{BODY}}", body))
+def render_frontpage(**options):
+	def callback(pathname, items):
+		body = (navhead(**options) +
+			"<main>" +
+			"\n".join(map(render_item, reversed(items))) +
+			"</main>")
+		with open("templates/frontpage.html", "r") as fp:
+			tpl = fp.read(-1)
+		write(pathname, tpl.replace("{{BODY}}", body))
+	return callback
 
-def render_index(pathname, items, *args, **kwargs):
-	body = (generate_navhead(dget(kwargs, "previous"), dget(kwargs, "next"), up=True) +
-		"<main>" +
-		"\n".join([render_item(i) for i in items[::-1]]) +
-		"</main>")
-	with open("templates/index.html", "r") as fp: tpl = fp.read(-1)
-	write(pathname, tpl.replace("{{BODY}}", body))
+def render_index(**options):
+	def callback(pathname, items):
+		body = (navhead(up=True, **options) +
+			"<main>" +
+			"\n".join(map(render_item, reversed(items))) +
+			"</main>")
+		with open("templates/index.html", "r") as fp:
+			tpl = fp.read(-1)
+		write(pathname, tpl.replace("{{BODY}}", body))
+	return callback
 
 def render_item(item):
-	guid = int_to_base(int(item["timestamp"]), 62)
+	guid = int_to_base(int(item.timestamp), 62)
 	return ('<article id="%s"><span class="data">%s</span>%s</article>' %
-		(guid, stamp_to_ymd(item["timestamp"]), item["content"]))
+		(guid, stamp_to_ymd(item.timestamp), item.content))
 
-def render_rss(pathname, items, *args, **kwargs):
-	body = "\n".join([render_item_rss(i) for i in items[::-1]])
-	with open("templates/rss.xml", "r") as fp: tpl = fp.read(-1)
+def render_rss(pathname, items):
+	body = "\n".join(map(render_item_rss, reversed(items)))
+	with open("templates/rss.xml", "r") as fp:
+		tpl = fp.read(-1)
 	write(pathname,
 		tpl
-			.replace("{{PUBDATE}}", stamp_to_rfc(items[-1]["timestamp"]))
-			.replace("{{BODY}}", body))
+			.replace("{{PUBDATE}}", stamp_to_rfc(items[-1].timestamp)
+			.replace("{{BODY}}", body)))
 
 def render_item_rss(item):
-	guid = int_to_base(int(item["timestamp"]), 62)
+	guid = int_to_base(int(item.timestamp), 62)
 	return ("<item>" +
 		"<title>New post on %s (%s)</title>" % (CONF["sitename"], guid) +
 		"<guid isPermaLink=\"false\">post/%s</guid>" % (guid,) +
-		"<pubDate>%s</pubDate>" % (stamp_to_rfc(item["timestamp"]),) +
-		"<description>%s</description>" % (escape(absolute_links(item["content"])),) +
+		"<pubDate>%s</pubDate>" % (stamp_to_rfc(item.timestamp),) +
+		"<description>%s</description>" % (escape(absolute_links(item.content)),) +
 		"<link>https://%s.neocities.org/#%s</link>" %(CONF["sitename"], guid) +
 		"</item>")
 
-def generate_navhead(previous, next, up=False):
+def navhead(p=None, n=None, up=False):
 	return ("<nav>" +
-		("<a href=\"%s\">← Previous</a>" % (previous,) if previous else "") +
+		("<a href=\"%s\">← Previous</a>" % (p,) if p else "") +
 		("<a href=\"../\">↑ Up</a>" if up else "") +
-		("<a href=\"%s\">Next →</a>" % (next,) if next else "") +
+		("<a href=\"%s\">Next →</a>" % (n,) if n else "") +
 		"</nav>")
 
 def main(pathname, args):
-	force= False
-	if len(args) > 0 and args[0] == "-f": force = True
-	
-	fp = open(pathname, "r")
-        
-	rngs = []
-	for r in ranges(itemnum(fp)):
-		rngs.append({"name": "index%s.html" % (str(r.start),), "range": r})
-	rngs[-1]["name"] = "index.html"
-	for i in range(len(rngs)-1):
-		rngs[i]["next"] = rngs[i+1]["name"]
-	rngs[-1]["next"] = None
-	for i in range(len(rngs)-1, 0, -1):
-		rngs[i]["previous"] = rngs[i-1]["name"]
-	rngs[0]["previous"] = None
+	force = False
+	if args and args[0] == "-f":
+		force = True
 
-	i = 0
+	fp = open(pathname, "r")
+	rngs = ranges(itemnum(fp))
+	cr = rngs[0]
 	c = 0
 	lst = []
 	fp.seek(0)
@@ -174,16 +201,23 @@ def main(pathname, args):
 		c += 1
 		item = parse(item)
 		lst.append(item)
-		if not c in rngs[i]["range"]:
-			if rngs[i]["name"] is "index.html":
-				Target("render/"+rngs[i]["name"], tuple(lst), render_frontpage,
-				       next=rngs[i]["next"], previous=rngs[i]["previous"]).make(force)
-				Target("render/"+"rss.xml", tuple(lst[-100:]), render_rss).make(force)
+		if not c in cr["range"]:
+			if cr["name"] == "index.html":
+				(Target("render/"+cr["name"])
+				.deps(tuple(lst))
+				.cb(render_frontpage(n=cr["next"], p=cr["previous"]))
+				.make(force))
+				(Target("render/"+"rss.xml")
+				.deps(tuple(lst[-100:]))
+				.cb(render_rss)
+				.make(force))
 			else:
-				Target("render/"+rngs[i]["name"], tuple(lst), render_index,
-					next=rngs[i]["next"], previous=rngs[i]["previous"]).make(force)
+				(Target("render/"+cr["name"])
+				.deps(tuple(lst))
+				.cb(render_index(n=cr["next"], p=cr["previous"]))
+				.make(force))
 			lst.clear()
-			i += 1
+			cr = cr["next"]
 	fp.close()
 
 if __name__ == "__main__":
