@@ -4,10 +4,20 @@ import os
 import time
 import json
 import string
+from functools import reduce
 
 RS = chr(30)
 
 CONF = json.loads(open("config").read())
+
+def apply(x, fn):
+	return fn(x)
+
+def pipe(*xs):
+	return lambda x: reduce(apply, xs, x)
+
+def pluck(key):
+	return lambda x: getattr(x, key)
 
 def absolute_links(x):
 	for i in ["href", "src"]:
@@ -86,9 +96,7 @@ class Target:
 
 	def youngerp(self):
 		own = os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1
-		others = max(map
-			(lambda x: int(x.timestamp)),
-			self.dependencies)
+		others = max(map(pipe(pluck("timestamp"), int), self.dependencies))
 		return own < others
 
 	def make(self, force):
