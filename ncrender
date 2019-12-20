@@ -10,14 +10,14 @@ RS = chr(30)
 
 CONF = json.loads(open("config").read())
 
-def apply(x, fn):
-	return fn(x)
+def pipe2(a, b):
+	return b(a)
 
-def pipe(*xs):
-	return lambda x: reduce(apply, xs, x)
+def pipe(x, *xs):
+	return reduce(pipe2, xs, x)
 
-def pluck(key):
-	return lambda x: getattr(x, key)
+def cmap(fn):
+	return lambda xs: map(fn, xs)
 
 def absolute_links(x):
 	for i in ["href", "src"]:
@@ -62,7 +62,7 @@ def item_stream(fp, block_size=2048):
 			chunk = fp.read(block_size)
 			if chunk == "":
 				break
-			else: data += chunk
+			data += chunk
 		else:
 			yield data[:idx]
 			data = data[idx:]
@@ -96,7 +96,10 @@ class Target:
 
 	def youngerp(self):
 		own = os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1
-		others = max(map(pipe(pluck("timestamp"), int), self.dependencies))
+		others = pipe(
+			self.dependencies,
+			cmap(lambda x: int(x.timestamp)),
+			max)
 		return own < others
 
 	def make(self, force):
@@ -145,7 +148,7 @@ def render_frontpage(**options):
 	def callback(pathname, items):
 		body = (navhead(**options) +
 			"<main>" +
-			"\n".join(map(render_item, reversed(items))) +
+			"\n".join(pipe(items, reversed, cmap(render_item))) +
 			"</main>")
 		with open("templates/frontpage.html", "r") as fp:
 			tpl = fp.read(-1)
@@ -156,7 +159,7 @@ def render_index(**options):
 	def callback(pathname, items):
 		body = (navhead(up=True, **options) +
 			"<main>" +
-			"\n".join(map(render_item, reversed(items))) +
+			"\n".join(pipe(items, reversed, cmap(render_item))) +
 			"</main>")
 		with open("templates/index.html", "r") as fp:
 			tpl = fp.read(-1)
