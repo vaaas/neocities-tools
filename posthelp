@@ -10,6 +10,12 @@ PATHNAME = "posts"
 def timestamp():
 	return int(time.time())
 
+def identity(x):
+	return x
+
+def fun_name(x):
+	return x.__name__
+
 def append(what):
 	with open(PATHNAME, "a") as fp:
 		fp.write(what)
@@ -20,17 +26,12 @@ def postsegment(*args):
 	return RS + "\n".join(args) + "\n\n"
 
 def path_to_href(pathname):
-	href = pathname.split("/")
-	if href[0] == ".":
-		href.pop(0)
-	href.pop(0)
-	return "/".join([""]+href)
+	return re.search("\.?/?render/(.+$)", pathname).group(1)
 
 def articleheader(pathname, title):
-	href = path_to_href(pathname)
 	return ("<h1>" +
-		"<img class=\"emoji\" alt=\"emoji\" src=\"/pics/article.svg\"/> " +
-		("<a href=\"%s\">%s</a>" % (href, title)) +
+		'<img class="emoji" alt="emoji" src="/pics/article.svg"/> ' +
+		('<a href="%s">%s</a>' % (path_to_href(pathname), title)) +
 		"</h1>")
 
 def write_article(pathname, text, title, YMD, timestamp):
@@ -62,16 +63,17 @@ def article():
 	ymd = time.strftime("%Y-%m-%d")
 	content = articleheader(pathname, title) + "\n" + blurb
 	write_article(pathname, text, title, ymd, timestamp)
-	append(postsegment(timestamp, "article", content))
+	return append(postsegment(timestamp, "article", content))
+
+def pretty_dict(xs, key=identity):
+	return "\n".join(sorted(("%s: %s" % (x, key(xs[x])) for x in xs)))
 
 def main():
 	FNS = {"n": note, "a": article}
 	answer = ""
-	while True:
-		answer = input("Select post type:\n\t(n)ote\n\t(a)rticle\n> ")
-		if answer in FNS:
-			break
-	return FNS[answer.strip()]()
+	while answer not in FNS:
+		answer = input("Select post type:\n" + pretty_dict(FNS, fun_name) + "\n> ").strip().lower()
+	return FNS[answer]()
 
 if __name__ == "__main__":
 	sys.exit(main())
