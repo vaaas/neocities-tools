@@ -5,26 +5,31 @@ import time, sys, re
 RS = chr(30)
 PATHNAME = "posts"
 
-def timestamp():
-	return int(time.time())
+def main():
+	FNS = {"n": note, "a": article}
+	answer = ""
+	while answer not in FNS:
+		answer = input("Select post type:\n" + pretty_dict(FNS, fun_name) + "\n> ").strip().lower()
+	return FNS[answer]()
 
-def identity(x):
-	return x
+def note():
+	print("Type your note (ends at EOF)\n")
+	content = ("<img class=\"emoji\" alt=\"emoji\" src=\"/pics/note.svg\"/> " +
+		sys.stdin.read(-1).strip())
+	stamp = str(now())
+	return append(postsegment(stamp, "note", content))
 
-def fun_name(x):
-	return x.__name__
-
-def append(what):
-	with open(PATHNAME, "a") as fp:
-		fp.write(what)
-	print("Appended")
-	return 0
-
-def postsegment(*args):
-	return RS + "\n".join(args) + "\n\n"
-
-def path_to_href(pathname):
-	return re.search("\.?/?render/(.+$)", pathname).group(1)
+def article():
+	name = input("File name: ")
+	pathname = "render/articles/" + name
+	text = sys.stdin.read(-1)
+	title = extract("<h1>([^<]+)</h1>", text)
+	blurb = extract("<p>(.+?)</p>", text)
+	timestamp = time.strftime("%s")
+	ymd = time.strftime("%Y-%m-%d")
+	content = articleheader(pathname, title) + "\n" + blurb
+	write_article(pathname, text, title, ymd, timestamp)
+	return append(postsegment(timestamp, "article", content))
 
 def articleheader(pathname, title):
 	return ("<h1>" +
@@ -44,34 +49,19 @@ def write_article(pathname, text, title, YMD, timestamp):
 		fp.write(tpl)
 	print()
 
-def note():
-	print("Type your note (ends at EOF)\n")
-	content = ("<img class=\"emoji\" alt=\"emoji\" src=\"/pics/note.svg\"/> " +
-		sys.stdin.read(-1).strip())
-	stamp = str(timestamp())
-	return append(postsegment(stamp, "note", content))
+def append(x):
+	with open(PATHNAME, "a") as f: f.write(x)
+	print("Appended")
+	return 0
 
-def article():
-	name = input("File name: ")
-	pathname = "render/articles/" + name
-	text = sys.stdin.read(-1)
-	title = re.search("<h1>([^<]+)</h1>", text).group(1)
-	blurb = re.search("<p>(.+?)</p>", text).group(1)
-	timestamp = time.strftime("%s")
-	ymd = time.strftime("%Y-%m-%d")
-	content = articleheader(pathname, title) + "\n" + blurb
-	write_article(pathname, text, title, ymd, timestamp)
-	return append(postsegment(timestamp, "article", content))
+def pretty_dict(xs, f=id): return linejoin(sorted(("%s: %s" % (x, f(xs[x])) for x in xs)))
 
-def pretty_dict(xs, key=identity):
-	return "\n".join(sorted(("%s: %s" % (x, key(xs[x])) for x in xs)))
+def now(): return int(time.time())
+def id(x): return x
+def fun_name(x): return x.__name__
+def postsegment(*x): return RS + linejoin(x) + "\n\n"
+def path_to_href(x): return extract("\.?/?render/(.+$)", x)
+def extract(r, x): return re.search(r, x).group(1)
+def linejoin(x): return "\n".join(x)
 
-def main():
-	FNS = {"n": note, "a": article}
-	answer = ""
-	while answer not in FNS:
-		answer = input("Select post type:\n" + pretty_dict(FNS, fun_name) + "\n> ").strip().lower()
-	return FNS[answer]()
-
-if __name__ == "__main__":
-	sys.exit(main())
+if __name__ == "__main__": sys.exit(main())
