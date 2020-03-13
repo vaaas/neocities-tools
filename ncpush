@@ -48,24 +48,24 @@ def remove_remote(xs, user, password):
 	args.append("https://%s:%s@neocities.org/api/delete" % (user, password))
 	run(args)
 
-def upload(what, user, password):
+def upload(xs, user, password):
 	args = ["/usr/bin/curl"]
-	for i in what:
+	for x in xs:
 		args.append("-F")
-		args.append("%s=@%s" % (i, i))
+		args.append("%s=@%s" % (x, x))
 	args.append("https://%s:%s@neocities.org/api/upload" % (user, password))
 	run(args)
-
-def run(xs): subprocess.call(xs, stdout=sys.stdout, stderr=sys.stderr)
-def output(xs): return subprocess.check_output(xs, universal_newlines=True)
-def size(x): return os.stat(x).st_size
-def head(x): return x[0]
-def heads(x): return map(head, x)
-def yes_p(x): return x.lower() in ["y", "ye", "yes", "yeah", "yup"]
 
 def walk_files(x):
 	for root, dirs, files in os.walk(x):
 		for i in files:
 			yield os.path.join(root, i)
+
+def run(x): subprocess.call(x, stdout=sys.stdout, stderr=sys.stderr)
+def output(x): return subprocess.check_output(x, universal_newlines=True)
+def size(x): return os.stat(x).st_size
+def head(x): return x[0]
+def heads(x): return map(head, x)
+def yes_p(x): return x.lower() in ["y", "ye", "yes", "yeah", "yup"]
 
 if __name__ == "__main__": sys.exit(main(sys.argv))
