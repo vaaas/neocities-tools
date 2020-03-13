@@ -4,61 +4,84 @@ import sys, os, time, json, string
 RS = chr(30)
 CONF = json.loads(open("config").read())
 DIGITS = string.digits + string.ascii_letters
+FORCE = False
 
-def main(pathname, args):
-	force = args and args[0] == "-f"
+def new_main(pathname, args):
+	FORCE = args and args[0] == "-f"
 	posts = open(pathname, "r")
-	rngs = ranges(itemnum(posts))
-	cr = rngs[0]
-	c = 0
-	lst = []
-	posts.seek(0)
-	for item in item_stream(posts):
-		c += 1
-		item = parse(item)
-		lst.append(item)
-		if not c in cr["range"]:
-			if cr["name"] == "index.html":
-				(Target("render/"+cr["name"])
-				.deps(tuple(lst))
-				.cb(render_frontpage(n=cr["next"], p=cr["previous"]))
-				.make(force))
-				(Target("render/"+"rss.xml")
-				.deps(tuple(lst[-100:]))
-				.cb(render_rss)
-				.make(force))
-			else:
-				(Target("render/"+cr["name"])
-				.deps(tuple(lst))
-				.cb(render_index(n=cr["next"], p=cr["previous"]))
-				.make(force))
-			lst.clear()
-			cr = cr["next"]
-	posts.close()
+	post_count = itemnum(posts)
+	pub = (Publisher()
+		.subscribe("total", Subscriber("index%s.html", post_count["total"], pagination=True, initial=render_frontpage))
+		.subscribe("total", Subscriber("rss.xml", post_count["total"], render=render_rss, last=100))
+		.subscribe("article", Subscriber("articles/index.html", post_count["article"])))
+	for x in item_stream(posts):
+		item = parse(x)
+		pub.publish(x.ptype, x)
+		pub.publish("total", x)
+	pub.finish()
 
-class Target:
-	def __init__(self, x):
-		self.pathname = x
-		self.dependencies = []
-		self.callback = None
+class Publisher():
+	def __init__(self):
+		self.channels = { "total": [] }
 
-	def deps(self, x):
-		self.dependencies = x
+	def subscribe(self, channel, callback):
+		if channel in self.channels:
+			self.channels[channel].append(callback)
+		else:
+			self.channels[channel] = [callback]
 		return self
 
-	def cb(self, x):
-		self.callback = x
-		return self
+	def publish(self, channel, x):
+		if channel in self.channels:
+			for f in self.channels[channel]: f(x)
 
-	def youngerp(self):
-		own = os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1
-		others = max(map(timestamp, self.dependencies))
-		return own < others
+	def finish(self):
+		for channel in self.channels:
+			for f in self.channels[channel]:
+				f(None)
 
-	def make(self, force):
-		if force or self.youngerp():
-			print("Making \033[1m\033[92m%s\033[0m" % (self.pathname,))
-			self.callback(self.pathname, self.dependencies)
+def Subscriber(name, count, pagination=False, render=render_index, initial=False):
+	bucket = []
+	queue = []
+	skip = count - initial
+	if initial is False: initial=render
+	if pagination:
+		xs = ranges(count)
+		for x in xs:
+			queue.append(name % str(x.start) if x.start > 0 else name % "")
+	else: queue.append(name)
+	i = len(queue) - 1
+
+	def callback(x):
+		if x is None:
+			if len(bucket):
+				make(bucket, queue, i, initial)
+				bucket = []
+			return
+		if initial and skip:
+			skip -= 1
+			return
+		bucket.append(x)
+		if len(bucket) == 100 and len(queue) > 1:
+			make(bucket, queue, i, render)
+			i -= 1
+			bucket = []
+	return callback
+
+def make(bucket, queue, i, render):
+	if FORCE or younger(queue[i], bucket):
+		print("Making \033[1m\033[92m%s\033[0m" % (queue[i]))
+			text = render(
+				bucket,
+				n=queue[i-1],
+				p=queue[i+1] if i < len(queue) - 2 else None,
+				up="/" in queue[i])
+			write(queue[i], text)
+
+def younger(x, xs):
+	own = os.path.getmtime(x) if os.path.isfile(x) else -1
+	others = max(map(timestamp, xs))
+	return own < others
 
 class Item:
 	def __init__(self, stamp, ptype, content):
@@ -66,32 +89,12 @@ class Item:
 		self.ptype = ptype
 		self.content = content
 
-class RangeList(list):
-	def __init__(self, xs=""):
-		super().__init__()
-		for i in xs:
-			self.add(i)
-
-	def add(self, x):
-		self.append({"name": "index.html", "range": x, "next": None, "previous": None})
-		if len(self) > 1:
-			self[-2]["name"] = "index%s.html" % (str(self[-2]["range"].start))
-			self[-2]["next"] = self[-1]
-			self[-1]["previous"] = self[-2]
-
-def ranges(n, lim=CONF["items"]):
-	lst = RangeList()
-	c = 0
-	while n > 0:
-		if n > lim+10:
-			lst.add(range(c*lim, (c+1)*lim))
-			c += 1
-			n -= lim
-		else:
-			lst.add(range(c*lim, c*lim + n))
-			c += 1
-			n = 0
-	return lst
+def ranges(x, lim=CONF["items"]):
+	div, mod = divmod(x, lim)
+	xs = [ range(i*lim, (i+1)*lim) for i in range(div) ]
+	if mod > 20: xs.push(range(div*lim, div*lim + mod))
+	else: xs[-1] = range(xs[-1].start, xs[-1].stop + mod)
+	return xs
 
 def render_frontpage(**options):
 	def callback(pathname, items):
