@@ -6,25 +6,26 @@ CONF = json.loads(open("config").read())
 DIGITS = string.digits + string.ascii_letters
 FORCE = False
 
-def new_main(pathname, args):
+def main(pathname, args):
+	global FORCE
 	FORCE = args and args[0] == "-f"
 	posts = open(pathname, "r")
 	post_count = item_count(posts)
-	pub = (Publisher()
-		.subscribe("total", Subscriber("index%s.html", post_count["total"], pagination=True, initial=render_frontpage))
-		.subscribe("total", Subscriber("rss.xml", post_count["total"], render=render_rss, last=100))
-		.subscribe("article", Subscriber("articles/index.html", post_count["article"])))
+	stream = (Stream()
+		.on("total", in_groups_of(100, Subscriber("index%s.html", post_count["total"], pagination=True, initial=render_frontpage)))
+		.on("total", last(100, Subscriber("rss.xml", post_count["total"], render=render_rss)))
+		.on("article", Subscriber("articles/index.html", post_count["article"])))
 	for x in item_stream(posts):
 		item = parse(x)
-		pub.publish(x.ptype, x)
-		pub.publish("total", x)
-	pub.finish()
+		stream.publish(x.ptype, item)
+		stream.publish("total", item)
+	stream.end()
 
-class Publisher():
+class Stream():
 	def __init__(self):
 		self.channels = { "total": [] }
 
-	def subscribe(self, channel, callback):
+	def on(self, channel, callback):
 		if channel in self.channels:
 			self.channels[channel].append(callback)
 		else:
@@ -35,45 +36,10 @@ class Publisher():
 		if channel in self.channels:
 			for f in self.channels[channel]: f(x)
 
-	def finish(self):
+	def end(self):
 		for channel in self.channels:
 			for f in self.channels[channel]:
-				f(None)
-
-def Subscriber(name, count, pagination=False, render=render_index, initial=False):
-	bucket = []
-	queue = []
-	skip = count - initial
-	if initial is False: initial=render
-	if pagination:
-		xs = ranges(count)
-		for x in xs:
-			queue.append(name % str(x.start) if x.start > 0 else name % "")
-	else: queue.append(name)
-	i = len(queue) - 1
-
-	def makefn(bucket, queue, i, fn=render):
-		text = fn(bucket,
-			n=queue[i-1] if pagination and i > 0 else None,
-			p=queue[i+1] if pagination and i < len(queue) - 1 else None,
-			up="/" in queue[i])
-			write(queue[i], text)
-
-	def callback(x):
-		if x is None:
-			if len(bucket):
-				make(queue[i], bucket, makefn(bucket, queue, i, fn=initial))
-				bucket = []
-			return
-		if initial and skip:
-			skip -= 1
-			return
-		bucket.append(x)
-		if len(bucket) == 100 and len(queue) > 1:
-			make(queue[i], bucket, makefn(bucket, queue, i))
-			i -= 1
-			bucket = []
-	return callback
+				f(StopIteration)
 
 def make(target, deps, fn):
 	if FORCE or younger(target, deps):
@@ -94,7 +60,7 @@ class Item:
 def ranges(x, lim=CONF["items"]):
 	div, mod = divmod(x, lim)
 	xs = [ range(i*lim, (i+1)*lim) for i in range(div) ]
-	if mod > 20: xs.push(range(div*lim, div*lim + mod))
+	if mod > 20: xs.append(range(div*lim, div*lim + mod))
 	elif mod > 0: xs[-1] = range(xs[-1].start, xs[-1].stop + mod)
 	return xs
 
@@ -105,7 +71,7 @@ def render_frontpage(items, **options):
 		"</main>")
 	with open("templates/frontpage.html", "r") as fp:
 		tpl = fp.read(-1)
-	write(pathname, tpl.replace("{{BODY}}", body))
+	return tpl.replace("{{BODY}}", body)
 
 def render_index(items, **options):
 	body = (navhead(**options) +
@@ -120,14 +86,13 @@ def render_item(item):
 	return ('<article id="%s"><span class="data">%s</span>%s</article>' %
 		(guid(item.timestamp), ymd(item.timestamp), item.content))
 
-def render_rss(pathname, items, **options):
+def render_rss(items, **options):
 	body = linejoin(map(render_item_rss, reversed(items)))
 	with open("templates/rss.xml", "r") as fp:
 		tpl = fp.read(-1)
-	write(pathname,
-		tpl
-			.replace("{{PUBDATE}}", rfctime(items[-1].timestamp))
-			.replace("{{BODY}}", body))
+	return (tpl
+		.replace("{{PUBDATE}}", rfctime(items[-1].timestamp))
+		.replace("{{BODY}}", body))
 
 def render_item_rss(item):
 	g = guid(item.timestamp)
@@ -189,6 +154,49 @@ def item_count(x):
 
 def write(f, x):
 	with open(f, "w") as p: p.write(x)
+
+def in_groups_of(n, f, margin=20):
+	xs = []
+	def callback(x):
+		if x is StopIteration:
+			if xs: f(xs)
+			f(StopIteration)
+			return
+		xs.append(x)
+		if len(xs) == n+margin:
+			f(xs[:n+margin])
+			xs = xs[n+margin:]
+	return callback
+
+def last(n, f):
+	xs = []
+	def callback(x):
+		if x is StopIteration:
+			f(xs)
+			f(StopIteration)
+			return
+		if len(xs) < n: xs.append(x)
+		else:
+			xs.pop(0)
+			xs.append(x)
+	return callback
+
+def Subscriber(name, count, pagination=False, render=render_index, initial=False):
+	queue = []
+	c = None
+	if pagination:
+		for x in ranges(count):
+			queue.append(name % (str(x.start),) if x.start > 0 else name % ("",))
+	else: queue.append(name)
+
+	def callback(x):
+		p = c
+		c = queue.pop()
+		n = queue[-1] if queue else None
+		fn = render if queue else initial
+		make(c, x, lambda y: fn(x, n=n, p=p, up="/" in c))
+
+	return callback
 
 def parse(x): return Item(*x.strip().split("\n", 2))
 def timestamp(x): return x.timestamp

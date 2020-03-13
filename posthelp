@@ -54,12 +54,12 @@ def append(x):
 	print("Appended")
 	return 0
 
-def pretty_dict(xs, f=id): return linejoin(sorted(("%s: %s" % (x, f(xs[x])) for x in xs)))
+def identity(x): return x
+def pretty_dict(xs, f=identity): return linejoin(sorted(("%s: %s" % (x, f(xs[x])) for x in xs)))
 def now(): return int(time.time())
-def id(x): return x
 def fun_name(x): return x.__name__
 def postsegment(*x): return RS + linejoin(x) + "\n\n"
-def path_to_href(x): return extract("\.?/?render/(.+$)", x)
+def path_to_href(x): return extract(r"\.?/?render/(.+$)", x)
 def extract(r, x): return re.search(r, x).group(1)
 def linejoin(x): return "\n".join(x)
 
