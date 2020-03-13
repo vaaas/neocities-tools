@@ -22,29 +22,6 @@ def main(pathname, args):
 		streams["total"].write(item)
 	for x in streams: streams[x].end()
 
-def make(target, deps, fn):
-	if FORCE or younger(target, deps):
-		print("Making \033[1m\033[92m%s\033[0m" % (target))
-		fn()
-
-def younger(x, xs):
-	own = os.path.getmtime(x) if os.path.isfile(x) else -1
-	others = max(map(timestamp, xs))
-	return own < others
-
-class Item:
-	def __init__(self, stamp, ptype, content):
-		self.timestamp = int(stamp)
-		self.ptype = ptype
-		self.content = content
-
-def ranges(x, lim=CONF["items"]):
-	div, mod = divmod(x, lim)
-	xs = [ range(i*lim, (i+1)*lim) for i in range(div) ]
-	if mod > 20: xs.append(range(div*lim, div*lim + mod))
-	elif mod > 0: xs[-1] = range(xs[-1].start, xs[-1].stop + mod)
-	return xs
-
 def render_frontpage(items, **options):
 	body = (navhead(**options) +
 		"<main>" +
@@ -92,6 +69,13 @@ def navhead(p=None, n=None, up=False):
 		("<a href=\"%s\">Next →</a>" % (n,) if n else "") +
 		"</nav>")
 
+def ranges(x, lim=CONF["items"]):
+	div, mod = divmod(x, lim)
+	xs = [ range(i*lim, (i+1)*lim) for i in range(div) ]
+	if mod > 20: xs.append(range(div*lim, div*lim + mod))
+	elif mod > 0: xs[-1] = range(xs[-1].start, xs[-1].stop + mod)
+	return xs
+
 def escape(x):
 	for i in [("&", "&amp;"), ("<", "&lt;"), (">", "&gt;")]:
 		x = x.replace(*i)
@@ -136,14 +120,27 @@ def item_count(x):
 def write(f, x):
 	with open(f, "w") as p: p.write(x)
 
+def make(target, deps, fn):
+	if FORCE or younger(target, deps):
+		print("Making \033[1m\033[92m%s\033[0m" % (target))
+		fn()
+
+def younger(x, xs):
+	own = os.path.getmtime(x) if os.path.isfile(x) else -1
+	others = max(map(timestamp, xs))
+	return own < others
+
+class Item:
+	def __init__(self, stamp, ptype, content):
+		self.timestamp = int(stamp)
+		self.ptype = ptype
+		self.content = content
+
 class Stream():
 	readers = []
 	def read(self, x): pass
 	def write(self, x):
 		for i in self.readers: i.read(x)
-	def listen(self, x):
-		self.readers.append(x)
-		return self
 	def pipe(self, x):
 		self.readers.append(x)
 		return x
@@ -190,7 +187,7 @@ class Subscriber(Stream):
 		self.c = self.queue.pop()
 		self.n = self.queue[-1] if self.queue else None
 		fn = self.render if self.queue else self.initial
-		make(self.c, x, lambda y: fn(x, n=self.n, p=self.p, up="/" in self.c))
+		make(self.c, x, lambda y: write(self.c, fn(x, n=self.n, p=self.p, up="/" in self.c)))
 
 def parse(x): return Item(*x.strip().split("\n", 2))
 def timestamp(x): return x.timestamp
