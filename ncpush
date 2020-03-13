@@ -7,79 +7,68 @@ from getpass import getpass
 
 CONF = json.loads(open("config").read())
 
-def byebye(string):
-	print(string)
-	sys.exit(1)
-
-def yes_p(string):
-	return string.lower() in ["y", "ye", "yes", "yeah", "yup"]
-
-def remote(user, password):
-	argv = ["/usr/bin/curl", "https://%s:%s@neocities.org/api/list" % (user, password)]
-	j = subprocess.check_output(argv, universal_newlines=True)
-	j = json.loads(j)
-	if j["result"] != "success":
-		byebye("Getting remote files failed")
-	return {f["path"]: f["size"] for f in j["files"] if not f["is_directory"]}
-
-def local_files():
-	loc = dict()
-	for root, dirs, files in os.walk("."):
-		for i in files:
-			path = os.path.relpath(os.path.join(root, i), ".")
-			size = os.stat(path).st_size
-			loc[path] = size
-	return loc
-
-def diffs(remlist, loclist):
-	rset = set(remlist)
-	lset = set(loclist)
-	remset = rset.difference(lset)
-	addset = lset.difference(rset)
-	commonset = rset.intersection(lset)
-	for i in commonset:
-		if remlist[i] != loclist[i]:
-			addset.add(i)
-	return remset, addset
-
-def remove_remote(what, user, password):
-	argv = ["/usr/bin/curl"]
-	for i in what:
-		argv.append("-d")
-		argv.append("filenames[]=" + i)
-	argv.append("https://%s:%s@neocities.org/api/delete" % (user, password))
-	subprocess.call(argv, stdout=sys.stdout, stderr=sys.stderr)
-
-def upload(what, user, password):
-	argv = ["/usr/bin/curl"]
-	for i in what:
-		argv.append("-F")
-		argv.append("%s=@%s" % (i, i))
-	argv.append("https://%s:%s@neocities.org/api/upload" % (user, password))
-	subprocess.call(argv, stdout=sys.stdout, stderr=sys.stderr)
-
-def main():
-	if len(sys.argv) >= 2:
-		os.chdir(sys.argv[1])
+def main(args):
+	if len(args) >= 2:
+		os.chdir(args[1])
 	elif os.path.isdir("render"):
 		os.chdir("render")
+	else:
+		raise Exception("no valid render directory")
+
 	user = CONF["sitename"]
 	print("Sitename is", user)
 	password = getpass("Password: ")
-	remove, add = diffs(remote(user, password), local_files())
+	remote = remote_files(user, password)
+	local = [ (os.path.relpath(x, "."), size(x)) for x in walk_files(".") ]
+	remove = set(heads(remote)).difference(set(heads(local)))
+	add = set(local).difference(set(remote))
+
 	if remove:
 		print("Deleting", ", ".join(remove))
 		if yes_p(input("Proceed? [y/n] > ")):
 			remove_remote(remove, user, password)
 			print("Done")
 	else: print("Nothing to delete")
+
 	if add:
 		print("Uploading", ", ".join(add))
 		if yes_p(input("Proceed? [y/n] > ")):
 			upload(add, user, password)
 			print("Done")
-	else:
-		print("Nothing to upload")
+	else: print("Nothing to upload")
 
-if __name__ == "__main__":
-	sys.exit(main())
+def remote_files(user, password):
+	args = ["/usr/bin/curl", "https://%s:%s@neocities.org/api/list" % (user, password)]
+	x = json.loads(output(args))
+	if x["result"] != "success": raise Exception("Getting remote files failed")
+	return [ (x["path"], x["size"]) for x in x["files"] if not x["is_directory"] ]
+
+def remove_remote(xs, user, password):
+	args = ["/usr/bin/curl"]
+	for x in xs:
+		args.append("-d")
+		args.append("filenames[]=" + x)
+	args.append("https://%s:%s@neocities.org/api/delete" % (user, password))
+	run(args)
+
+def upload(what, user, password):
+	args = ["/usr/bin/curl"]
+	for i in what:
+		args.append("-F")
+		args.append("%s=@%s" % (i, i))
+	args.append("https://%s:%s@neocities.org/api/upload" % (user, password))
+	run(args)
+
+def run(xs): subprocess.call(xs, stdout=sys.stdout, stderr=sys.stderr)
+def output(xs): return subprocess.check_output(xs, universal_newlines=True)
+def size(x): return os.stat(x).st_size
+def head(x): return x[0]
+def heads(x): return map(head, x)
+def yes_p(x): return x.lower() in ["y", "ye", "yes", "yeah", "yup"]
+
+def walk_files(x):
+	for root, dirs, files in os.walk(x):
+		for i in files:
+			yield os.path.join(root, i)
+
+if __name__ == "__main__": sys.exit(main(sys.argv))
