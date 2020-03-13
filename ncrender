@@ -7,13 +7,13 @@ DIGITS = string.digits + string.ascii_letters
 
 def main(pathname, args):
 	force = args and args[0] == "-f"
-	fp = open(pathname, "r")
-	rngs = ranges(itemnum(fp))
+	posts = open(pathname, "r")
+	rngs = ranges(itemnum(posts))
 	cr = rngs[0]
 	c = 0
 	lst = []
-	fp.seek(0)
-	for item in item_stream(fp):
+	posts.seek(0)
+	for item in item_stream(posts):
 		c += 1
 		item = parse(item)
 		lst.append(item)
@@ -34,7 +34,7 @@ def main(pathname, args):
 				.make(force))
 			lst.clear()
 			cr = cr["next"]
-	fp.close()
+	posts.close()
 
 class Target:
 	def __init__(self, x):
