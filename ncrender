@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import sys, os, time, json, string
-from functools import reduce
 
 RS = chr(30)
 CONF = json.loads(open("config").read())
@@ -37,47 +36,6 @@ def main(pathname, args):
 			cr = cr["next"]
 	fp.close()
 
-def absolute_links(x):
-	for i in ["href", "src"]:
-		x = x.replace(
-			'%s="/' % (i,),
-			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
-	return x
-
-def escape(x):
-	for i in [("&", "&amp;"), ("<", "&lt;"), (">", "&gt;")]:
-		x = x.replace(*i)
-	return x
-
-def int_to_base(x, base):
-	if x == 0: return DIGITS[0]
-	xs = []
-	while x:
-		x, mod = divmod(x, base)
-		xs.append(DIGITS[mod])
-	return ''.join(xs.reverse())
-
-def item_stream(fp, block_size=2048):
-	data = fp.read(block_size)
-	while True:
-		i = data.find(RS, 1)
-		if i != -1:
-			yield data[:i]
-			data = data[i:]
-		else:
-			x = fp.read(block_size)
-			if x == "": break
-			data += x
-	if not data == "": yield data
-
-def itemnum(fp):
-	c = { "total": 0 }
-	for x in map(parse, item_stream(fp)):
-		c["total"] += 1
-		if not x.ptype in c: c[x.ptype] = 1
-		else: c[x.ptype] += 1
-	return c
-
 class Target:
 	def __init__(self, x):
 		self.pathname = x
@@ -94,10 +52,7 @@ class Target:
 
 	def youngerp(self):
 		own = os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1
-		others = pipe(
-			self.dependencies,
-			mapping(timestamp),
-			max)
+		others = max(map(timestamp, self.dependencies))
 		return own < others
 
 	def make(self, force):
@@ -138,15 +93,11 @@ def ranges(n, lim=CONF["items"]):
 			n = 0
 	return lst
 
-def write(pathname, contents):
-	with open(pathname, "w") as fp:
-		fp.write(contents)
-
 def render_frontpage(**options):
 	def callback(pathname, items):
 		body = (navhead(**options) +
 			"<main>" +
-			"\n".join(pipe(items, reversed, mapping(render_item))) +
+			linejoin(map(render_item, reversed(items))) +
 			"</main>")
 		with open("templates/frontpage.html", "r") as fp:
 			tpl = fp.read(-1)
@@ -157,7 +108,7 @@ def render_index(**options):
 	def callback(pathname, items):
 		body = (navhead(up=True, **options) +
 			"<main>" +
-			"\n".join(pipe(items, reversed, mapping(render_item))) +
+			linejoin(map(render_item, reversed(items))) +
 			"</main>")
 		with open("templates/index.html", "r") as fp:
 			tpl = fp.read(-1)
@@ -169,7 +120,7 @@ def render_item(item):
 		(guid(item.timestamp), ymd(item.timestamp), item.content))
 
 def render_rss(pathname, items):
-	body = "\n".join(map(render_item_rss, reversed(items)))
+	body = linejoin(map(render_item_rss, reversed(items)))
 	with open("templates/rss.xml", "r") as fp:
 		tpl = fp.read(-1)
 	write(pathname,
@@ -194,13 +145,56 @@ def navhead(p=None, n=None, up=False):
 		("<a href=\"%s\">Next →</a>" % (n,) if n else "") +
 		"</nav>")
 
-def pipe2(a, b): return b(a)
-def pipe(x, *xs): return reduce(pipe2, xs, x)
-def mapping(f): return lambda x: map(f, x)
-def parse(item): return Item(*item.strip().split("\n", 2))
+def escape(x):
+	for i in [("&", "&amp;"), ("<", "&lt;"), (">", "&gt;")]:
+		x = x.replace(*i)
+	return x
+
+def int_to_base(x, base):
+	if x == 0: return DIGITS[0]
+	xs = []
+	while x:
+		x, mod = divmod(x, base)
+		xs.append(DIGITS[mod])
+	return emptyjoin(xs.reverse())
+
+def absolute_links(x):
+	for i in ["href", "src"]:
+		x = x.replace(
+			'%s="/' % (i,),
+			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
+	return x
+
+def item_stream(fp, block_size=2048):
+	data = fp.read(block_size)
+	while True:
+		i = data.find(RS, 1)
+		if i != -1:
+			yield data[:i]
+			data = data[i:]
+		else:
+			x = fp.read(block_size)
+			if x == "": break
+			data += x
+	if not data == "": yield data
+
+def itemnum(x):
+	c = { "total": 0 }
+	for i in map(parse, item_stream(x)):
+		c["total"] += 1
+		if not i.ptype in c: c[i.ptype] = 1
+		else: c[i.ptype] += 1
+	return c
+
+def write(f, x):
+	with open(f, "w") as p: p.write(x)
+
+def parse(x): return Item(*x.strip().split("\n", 2))
 def timestamp(x): return x.timestamp
 def guid(x): return int_to_base(x, 62)
 def ymd(x): return time.strftime("%Y-%m-%d", time.gmtime(x))
 def rfctime(x): return time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(x))
+def linejoin(x): return "\n".join(x)
+def emptyjoin(x): return "".join(x)
 
 if __name__ == "__main__": main("posts", sys.argv[1:])
