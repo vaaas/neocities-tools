@@ -10,7 +10,8 @@ def main():
 	answer = ""
 	while answer not in FNS:
 		answer = input("Select post type:\n" + pretty_dict(FNS, fun_name) + "\n> ").strip().lower()
-	return FNS[answer]()
+	FNS[answer]()
+	print("Done")
 
 def note():
 	print("Type your note (ends at EOF)\n")
@@ -47,7 +48,7 @@ def write_article(pathname, text, title, YMD, timestamp):
 		.replace("{{BODY}}", text))
 	with open(pathname, "w") as fp:
 		fp.write(tpl)
-	print()
+	print("Wrote", pathname)
 
 def append(x):
 	with open(PATHNAME, "a") as f: f.write(x)
@@ -55,7 +56,6 @@ def append(x):
 	return 0
 
 def pretty_dict(xs, f=id): return linejoin(sorted(("%s: %s" % (x, f(xs[x])) for x in xs)))
-
 def now(): return int(time.time())
 def id(x): return x
 def fun_name(x): return x.__name__
