@@ -1,23 +1,41 @@
 #!/usr/bin/env python3
-import sys
-import os
-import time
-import json
-import string
+import sys, os, time, json, string
 from functools import reduce
 
 RS = chr(30)
-
 CONF = json.loads(open("config").read())
+DIGITS = string.digits + string.ascii_letters
 
-def pipe2(a, b):
-	return b(a)
-
-def pipe(x, *xs):
-	return reduce(pipe2, xs, x)
-
-def cmap(fn):
-	return lambda xs: map(fn, xs)
+def main(pathname, args):
+	force = args and args[0] == "-f"
+	fp = open(pathname, "r")
+	rngs = ranges(itemnum(fp))
+	cr = rngs[0]
+	c = 0
+	lst = []
+	fp.seek(0)
+	for item in item_stream(fp):
+		c += 1
+		item = parse(item)
+		lst.append(item)
+		if not c in cr["range"]:
+			if cr["name"] == "index.html":
+				(Target("render/"+cr["name"])
+				.deps(tuple(lst))
+				.cb(render_frontpage(n=cr["next"], p=cr["previous"]))
+				.make(force))
+				(Target("render/"+"rss.xml")
+				.deps(tuple(lst[-100:]))
+				.cb(render_rss)
+				.make(force))
+			else:
+				(Target("render/"+cr["name"])
+				.deps(tuple(lst))
+				.cb(render_index(n=cr["next"], p=cr["previous"]))
+				.make(force))
+			lst.clear()
+			cr = cr["next"]
+	fp.close()
 
 def absolute_links(x):
 	for i in ["href", "src"]:
@@ -27,58 +45,38 @@ def absolute_links(x):
 	return x
 
 def escape(x):
-	return (x
-		.replace("&", "&amp;")
-		.replace("<", "&lt;")
-		.replace(">", "&gt;"))
+	for i in [("&", "&amp;"), ("<", "&lt;"), (">", "&gt;")]:
+		x = x.replace(*i)
+	return x
 
 def int_to_base(x, base):
-	digits = string.digits + string.ascii_letters
-	if x == 0:
-		return digits[0]
-	num = []
+	if x == 0: return DIGITS[0]
+	xs = []
 	while x:
-		div, mod = divmod(x, base)
-		num.append(digits[mod])
-		x = div
-	num.reverse()
-	return ''.join(num)
-
-def stamp_to_ymd(timestamp):
-	return time.strftime(
-		"%Y-%m-%d",
-		time.gmtime(int(timestamp)))
-
-def stamp_to_rfc(timestamp):
-	return time.strftime(
-		"%a, %d %b %Y %H:%M:%S +0000",
-		time.gmtime(int(timestamp)))
+		x, mod = divmod(x, base)
+		xs.append(DIGITS[mod])
+	return ''.join(xs.reverse())
 
 def item_stream(fp, block_size=2048):
 	data = fp.read(block_size)
 	while True:
-		idx = data.find(RS, 1)
-		if idx == -1:
-			chunk = fp.read(block_size)
-			if chunk == "":
-				break
-			data += chunk
+		i = data.find(RS, 1)
+		if i != -1:
+			yield data[:i]
+			data = data[i:]
 		else:
-			yield data[:idx]
-			data = data[idx:]
-	if not data == "":
-		yield data
+			x = fp.read(block_size)
+			if x == "": break
+			data += x
+	if not data == "": yield data
 
-def itemnum(fp, block_size=2048):
-	counter = 0
-	while True:
-		chunk = fp.read(block_size)
-		counter += chunk.count(RS)
-		if not chunk:
-			return counter
-
-def parse(item):
-	return Item(*item.strip().split("\n", 2))
+def itemnum(fp):
+	c = { "total": 0 }
+	for x in map(parse, item_stream(fp)):
+		c["total"] += 1
+		if not x.ptype in c: c[x.ptype] = 1
+		else: c[x.ptype] += 1
+	return c
 
 class Target:
 	def __init__(self, x):
@@ -98,7 +96,7 @@ class Target:
 		own = os.path.getmtime(self.pathname) if os.path.isfile(self.pathname) else -1
 		others = pipe(
 			self.dependencies,
-			cmap(lambda x: int(x.timestamp)),
+			mapping(timestamp),
 			max)
 		return own < others
 
@@ -108,8 +106,8 @@ class Target:
 			self.callback(self.pathname, self.dependencies)
 
 class Item:
-	def __init__(self, timestamp, ptype, content):
-		self.timestamp = timestamp
+	def __init__(self, stamp, ptype, content):
+		self.timestamp = int(stamp)
 		self.ptype = ptype
 		self.content = content
 
@@ -148,7 +146,7 @@ def render_frontpage(**options):
 	def callback(pathname, items):
 		body = (navhead(**options) +
 			"<main>" +
-			"\n".join(pipe(items, reversed, cmap(render_item))) +
+			"\n".join(pipe(items, reversed, mapping(render_item))) +
 			"</main>")
 		with open("templates/frontpage.html", "r") as fp:
 			tpl = fp.read(-1)
@@ -159,7 +157,7 @@ def render_index(**options):
 	def callback(pathname, items):
 		body = (navhead(up=True, **options) +
 			"<main>" +
-			"\n".join(pipe(items, reversed, cmap(render_item))) +
+			"\n".join(pipe(items, reversed, mapping(render_item))) +
 			"</main>")
 		with open("templates/index.html", "r") as fp:
 			tpl = fp.read(-1)
@@ -167,9 +165,8 @@ def render_index(**options):
 	return callback
 
 def render_item(item):
-	guid = int_to_base(int(item.timestamp), 62)
 	return ('<article id="%s"><span class="data">%s</span>%s</article>' %
-		(guid, stamp_to_ymd(item.timestamp), item.content))
+		(guid(item.timestamp), ymd(item.timestamp), item.content))
 
 def render_rss(pathname, items):
 	body = "\n".join(map(render_item_rss, reversed(items)))
@@ -177,17 +174,17 @@ def render_rss(pathname, items):
 		tpl = fp.read(-1)
 	write(pathname,
 		tpl
-			.replace("{{PUBDATE}}", stamp_to_rfc(items[-1].timestamp))
+			.replace("{{PUBDATE}}", rfctime(items[-1].timestamp))
 			.replace("{{BODY}}", body))
 
 def render_item_rss(item):
-	guid = int_to_base(int(item.timestamp), 62)
+	g = guid(item.timestamp)
 	return ("<item>" +
-		"<title>New post on %s (%s)</title>" % (CONF["sitename"], guid) +
-		"<guid isPermaLink=\"false\">post/%s</guid>" % (guid,) +
-		"<pubDate>%s</pubDate>" % (stamp_to_rfc(item.timestamp),) +
+		"<title>New post on %s (%s)</title>" % (CONF["sitename"], g) +
+		"<guid isPermaLink=\"false\">post/%s</guid>" % (g,) +
+		"<pubDate>%s</pubDate>" % (rfctime(item.timestamp),) +
 		"<description>%s</description>" % (escape(absolute_links(item.content)),) +
-		"<link>https://%s.neocities.org/#%s</link>" %(CONF["sitename"], guid) +
+		"<link>https://%s.neocities.org/#%s</link>" %(CONF["sitename"], g) +
 		"</item>")
 
 def navhead(p=None, n=None, up=False):
@@ -197,39 +194,13 @@ def navhead(p=None, n=None, up=False):
 		("<a href=\"%s\">Next →</a>" % (n,) if n else "") +
 		"</nav>")
 
-def main(pathname, args):
-	force = False
-	if args and args[0] == "-f":
-		force = True
+def pipe2(a, b): return b(a)
+def pipe(x, *xs): return reduce(pipe2, xs, x)
+def mapping(f): return lambda x: map(f, x)
+def parse(item): return Item(*item.strip().split("\n", 2))
+def timestamp(x): return x.timestamp
+def guid(x): return int_to_base(x, 62)
+def ymd(x): return time.strftime("%Y-%m-%d", time.gmtime(x))
+def rfctime(x): return time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(x))
 
-	fp = open(pathname, "r")
-	rngs = ranges(itemnum(fp))
-	cr = rngs[0]
-	c = 0
-	lst = []
-	fp.seek(0)
-	for item in item_stream(fp):
-		c += 1
-		item = parse(item)
-		lst.append(item)
-		if not c in cr["range"]:
-			if cr["name"] == "index.html":
-				(Target("render/"+cr["name"])
-				.deps(tuple(lst))
-				.cb(render_frontpage(n=cr["next"], p=cr["previous"]))
-				.make(force))
-				(Target("render/"+"rss.xml")
-				.deps(tuple(lst[-100:]))
-				.cb(render_rss)
-				.make(force))
-			else:
-				(Target("render/"+cr["name"])
-				.deps(tuple(lst))
-				.cb(render_index(n=cr["next"], p=cr["previous"]))
-				.make(force))
-			lst.clear()
-			cr = cr["next"]
-	fp.close()
-
-if __name__ == "__main__":
-	main("posts", sys.argv[1:])
+if __name__ == "__main__": main("posts", sys.argv[1:])
