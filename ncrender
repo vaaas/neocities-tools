@@ -10,36 +10,17 @@ def main(pathname, args):
 	global FORCE
 	FORCE = args and args[0] == "-f"
 	posts = open(pathname, "r")
-	post_count = item_count(posts)
-	stream = (Stream()
-		.on("total", in_groups_of(100, Subscriber("index%s.html", post_count["total"], pagination=True, initial=render_frontpage)))
-		.on("total", last(100, Subscriber("rss.xml", post_count["total"], render=render_rss)))
-		.on("article", Subscriber("articles/index.html", post_count["article"])))
+	count = item_count(posts)
+	streams = { k : Stream() for k in count }
+	streams["total"] = Stream()
+	streams["total"].pipe(GroupBy(100)).pipe(Subscriber("index%s.html", count["total"], pagination=True, initial=render_frontpage))
+	streams["total"].pipe(Last(100)).pipe(Subscriber("rss.xml", count["total"], render=render_rss))
+	streams["article"].pipe(Subscriber("articles/index.html", count["article"]))
 	for x in item_stream(posts):
 		item = parse(x)
-		stream.publish(x.ptype, item)
-		stream.publish("total", item)
-	stream.end()
-
-class Stream():
-	def __init__(self):
-		self.channels = { "total": [] }
-
-	def on(self, channel, callback):
-		if channel in self.channels:
-			self.channels[channel].append(callback)
-		else:
-			self.channels[channel] = [callback]
-		return self
-
-	def publish(self, channel, x):
-		if channel in self.channels:
-			for f in self.channels[channel]: f(x)
-
-	def end(self):
-		for channel in self.channels:
-			for f in self.channels[channel]:
-				f(StopIteration)
+		streams[x.ptype].write(item)
+		streams["total"].write(item)
+	for x in streams: streams[x].end()
 
 def make(target, deps, fn):
 	if FORCE or younger(target, deps):
@@ -155,48 +136,61 @@ def item_count(x):
 def write(f, x):
 	with open(f, "w") as p: p.write(x)
 
-def in_groups_of(n, f, margin=20):
-	xs = []
-	def callback(x):
-		if x is StopIteration:
-			if xs: f(xs)
-			f(StopIteration)
-			return
-		xs.append(x)
-		if len(xs) == n+margin:
-			f(xs[:n+margin])
-			xs = xs[n+margin:]
-	return callback
+class Stream():
+	readers = []
+	def read(self, x): pass
+	def write(self, x):
+		for i in self.readers: i.read(x)
+	def listen(self, x):
+		self.readers.append(x)
+		return self
+	def pipe(self, x):
+		self.readers.append(x)
+		return x
+	def end(self, x=None):
+		if x: self.write(x)
+		self.write(StopIteration)
 
-def last(n, f):
-	xs = []
-	def callback(x):
-		if x is StopIteration:
-			f(xs)
-			f(StopIteration)
-			return
-		if len(xs) < n: xs.append(x)
-		else:
-			xs.pop(0)
-			xs.append(x)
-	return callback
+class GroupBy(Stream):
+	def __init__(self, n, margin=20):
+		self.xs = []
+		self.n = n
+		self.margin = margin
+	def read(self, x):
+		if x is StopIteration: return self.end(self.xs)
+		self.xs.append(x)
+		if len(self.xs) == self.n+self.margin:
+			self.write(self.xs[:self.n])
+			self.xs = self.xs[self.n:]
 
-def Subscriber(name, count, pagination=False, render=render_index, initial=False):
-	queue = []
-	c = None
-	if pagination:
-		for x in ranges(count):
-			queue.append(name % (str(x.start),) if x.start > 0 else name % ("",))
-	else: queue.append(name)
+class Last(Stream):
+	def __init__(self, n):
+		self.xs = []
+		self.n = n
+	def read(self, x):
+		if x is StopIteration: return self.end(self.xs)
+		if len(self.xs) == self.n: self.xs.pop(0)
+		self.xs.append(x)
 
-	def callback(x):
-		p = c
-		c = queue.pop()
-		n = queue[-1] if queue else None
-		fn = render if queue else initial
-		make(c, x, lambda y: fn(x, n=n, p=p, up="/" in c))
+class Subscriber(Stream):
+	def __init__(self, name, count, pagination=False, render=render_index, initial=None):
+		self.queue = []
+		self.c = None
+		self.p = None
+		self.n = None
+		self.render = render
+		self.initial = initial or render
+		if pagination:
+			for x in ranges(count):
+				self.queue.append(name % (str(x.start),) if x.start > 0 else name % ("",))
+		else: self.queue.append(name)
 
-	return callback
+	def read(self, x):
+		self.p = self.c
+		self.c = self.queue.pop()
+		self.n = self.queue[-1] if self.queue else None
+		fn = self.render if self.queue else self.initial
+		make(self.c, x, lambda y: fn(x, n=self.n, p=self.p, up="/" in self.c))
 
 def parse(x): return Item(*x.strip().split("\n", 2))
 def timestamp(x): return x.timestamp
