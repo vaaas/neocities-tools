@@ -11,15 +11,14 @@ def main(pathname, args):
 	FORCE = args and args[0] == "-f"
 	posts = open(pathname, "r")
 	count = item_count(posts)
-	streams = { k : Stream() for k in count }
+	streams = { x : Stream() for x in count }
 	streams["total"] = Stream()
 	streams["total"].pipe(GroupBy(100)).pipe(Subscriber("index%s.html", count["total"], pagination=True, initial=render_frontpage))
 	streams["total"].pipe(Last(100)).pipe(Subscriber("rss.xml", count["total"], render=render_rss))
-	streams["article"].pipe(Subscriber("articles/index.html", count["article"]))
-	for x in item_stream(posts):
-		item = parse(x)
-		streams[x.ptype].write(item)
-		streams["total"].write(item)
+	streams["article"].pipe(Everything()).pipe(Subscriber("articles/index.html", count["article"]))
+	for x in map(parse, item_stream(posts)):
+		streams[x.ptype].write(x)
+		streams["total"].write(x)
 	for x in streams: streams[x].end()
 
 def render_frontpage(items, **options):
@@ -87,7 +86,7 @@ def int_to_base(x, base):
 	while x:
 		x, mod = divmod(x, base)
 		xs.append(DIGITS[mod])
-	return emptyjoin(xs.reverse())
+	return emptyjoin(reversed(xs))
 
 def absolute_links(x):
 	for i in ["href", "src"]:
@@ -115,10 +114,11 @@ def item_count(x):
 		c["total"] += 1
 		if not i.ptype in c: c[i.ptype] = 1
 		else: c[i.ptype] += 1
+	x.seek(0)
 	return c
 
 def write(f, x):
-	with open(f, "w") as p: p.write(x)
+	with open("render/"+f, "w") as p: p.write(x)
 
 def make(target, deps, fn):
 	if FORCE or younger(target, deps):
@@ -137,7 +137,7 @@ class Item:
 		self.content = content
 
 class Stream():
-	readers = []
+	def __init__(self): self.readers = []
 	def read(self, x): pass
 	def write(self, x):
 		for i in self.readers: i.read(x)
@@ -150,6 +150,7 @@ class Stream():
 
 class GroupBy(Stream):
 	def __init__(self, n, margin=20):
+		super().__init__()
 		self.xs = []
 		self.n = n
 		self.margin = margin
@@ -162,6 +163,7 @@ class GroupBy(Stream):
 
 class Last(Stream):
 	def __init__(self, n):
+		super().__init__()
 		self.xs = []
 		self.n = n
 	def read(self, x):
@@ -169,8 +171,19 @@ class Last(Stream):
 		if len(self.xs) == self.n: self.xs.pop(0)
 		self.xs.append(x)
 
+class Everything(Stream):
+	def __init__(self):
+		super().__init__()
+		self.xs = []
+	def read(self, x):
+		if x is StopIteration and self.xs:
+			self.write(self.xs)
+			self.xs = []
+		else: self.xs.append(x)
+
 class Subscriber(Stream):
 	def __init__(self, name, count, pagination=False, render=render_index, initial=None):
+		super().__init__()
 		self.queue = []
 		self.c = None
 		self.p = None
@@ -183,11 +196,12 @@ class Subscriber(Stream):
 		else: self.queue.append(name)
 
 	def read(self, x):
+		if x is StopIteration: return
 		self.p = self.c
 		self.c = self.queue.pop()
 		self.n = self.queue[-1] if self.queue else None
 		fn = self.render if self.queue else self.initial
-		make(self.c, x, lambda y: write(self.c, fn(x, n=self.n, p=self.p, up="/" in self.c)))
+		make(self.c, x, lambda: write(self.c, fn(x, n=self.n, p=self.p, up="/" in self.c)))
 
 def parse(x): return Item(*x.strip().split("\n", 2))
 def timestamp(x): return x.timestamp

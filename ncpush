@@ -17,18 +17,18 @@ def main(args):
 	password = getpass("Password: ")
 	remote = remote_files(user, password)
 	local = [ (os.path.relpath(x, "."), size(x)) for x in walk_files(".") ]
-	remove = set(heads(remote)).difference(set(heads(local)))
-	add = set(local).difference(set(remote))
+	remove = heads(remote).difference(heads(local))
+	add = heads(set(local).difference(set(remote)))
 
 	if remove:
-		print("Deleting", ", ".join(remove))
+		print("Deleting", commajoin(remove))
 		if yes_p(input("Proceed? [y/n] > ")):
 			remove_remote(remove, user, password)
 			print("Done")
 	else: print("Nothing to delete")
 
 	if add:
-		print("Uploading", ", ".join(add))
+		print("Uploading", commajoin(add))
 		if yes_p(input("Proceed? [y/n] > ")):
 			upload(add, user, password)
 			print("Done")
@@ -65,7 +65,8 @@ def run(x): subprocess.call(x, stdout=sys.stdout, stderr=sys.stderr)
 def output(x): return subprocess.check_output(x, universal_newlines=True)
 def size(x): return os.stat(x).st_size
 def head(x): return x[0]
-def heads(x): return map(head, x)
+def heads(x): return set(map(head, x))
 def yes_p(x): return x.lower() in ["y", "ye", "yes", "yeah", "yup"]
+def commajoin(x): return ", ".join(x)
 
 if __name__ == "__main__": sys.exit(main(sys.argv))
