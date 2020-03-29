@@ -20,8 +20,8 @@ def note():
 	return append(postsegment(stamp, "note", content))
 
 def article():
-	name = input("File name: ")
-	pathname = "render/articles/" + name
+	name = input("File name (without extension): ")
+	pathname = "render/articles/" + name + ".html"
 	text = sys.stdin.read(-1)
 	title = extract("<h1>([^<]+)</h1>", text)
 	blurb = extract("<p>(.+?)</p>", text)
@@ -59,7 +59,7 @@ def pretty_dict(xs, f=identity): return linejoin(sorted(("%s: %s" % (x, f(xs[x])
 def now(): return int(time.time())
 def fun_name(x): return x.__name__
 def postsegment(*x): return RS + linejoin(x) + "\n\n"
-def path_to_href(x): return extract(r"\.?/?render/(.+$)", x)
+def path_to_href(x): return extract(r"\.?/?render(/.+$)", x)
 def extract(r, x): return re.search(r, x).group(1)
 def linejoin(x): return "\n".join(x)
 
