@@ -21,7 +21,7 @@ def note():
 
 def article():
 	name = input("File name (without extension): ")
-	pathname = "render/articles/" + name + ".html"
+	pathname = "render/articles/" + underliner(name) + ".html"
 	text = sys.stdin.read(-1)
 	title = extract("<h1>([^<]+)</h1>", text)
 	blurb = extract("<p>(.+?)</p>", text)
@@ -62,5 +62,6 @@ def postsegment(*x): return RS + linejoin(x) + "\n\n"
 def path_to_href(x): return extract(r"\.?/?render(/.+$)", x)
 def extract(r, x): return re.search(r, x).group(1)
 def linejoin(x): return "\n".join(x)
+def underliner(x): return x.replace(" ", "_")
 
 if __name__ == "__main__": sys.exit(main())
