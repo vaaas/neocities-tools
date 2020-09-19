@@ -2,60 +2,151 @@
 import sys, os, time, json, string
 
 RS = chr(30)
-CONF = json.loads(open("config").read())
+CONF = json.loads(open('config').read())
+ITEMS = CONF['items']
 DIGITS = string.digits + string.ascii_letters
 FORCE = False
 
 def main(pathname, args):
 	global FORCE
-	FORCE = args and args[0] == "-f"
-	posts = open(pathname, "r")
-	count = item_count(posts)
-	streams = { x : Stream() for x in count }
-	streams["total"] = Stream()
-	streams["total"].pipe(GroupBy(100)).pipe(Subscriber("index%s.html", count["total"], pagination=True, initial=render_frontpage))
-	streams["total"].pipe(Last(100)).pipe(Subscriber("rss.xml", count["total"], render=render_rss))
-	streams["article"].pipe(Everything()).pipe(Subscriber("articles/index.html", count["article"]))
-	for x in map(parse, item_stream(posts)):
-		streams[x.ptype].write(x)
-		streams["total"].write(x)
-	for x in streams: streams[x].end()
+	FORCE = args and args[0] == '-f'
+	posts = pipe(pathname, read, item_stream, map(parse))
+	total = pipe(posts, group(ITEMS))
+	pipe(
+		total,
+		reversed,
+		enumerate,
+		mapFirst(niceName('index%s.html')),
+		DoubleLink.fromList,
+		filter(B(younger)(value)),
+		map(render_index),
+		map(write))
+	pipe(
+		total,
+		last,
+		withFirst('rss.xml'),
+		IF(younger,
+			piping(render_rss, write)))
+	del total
+	pipe(
+		posts,
+		filter(article),
+		withFirst('articles/index.html'),
+		IF(younger,
+			piping(DoubleLink, render_index, write)))
 
-def render_frontpage(items, **options):
-	body = (navhead(**options) +
-		"<main>" +
-		linejoin(map(render_item, reversed(items))) +
-		"</main>")
-	with open("templates/frontpage.html", "r") as fp:
-		tpl = fp.read(-1)
-	return tpl.replace("{{BODY}}", body)
+def withFirst(p):
+	def inner(x): return (p, x)
+	return inner
 
-def render_index(items, **options):
-	body = (navhead(**options) +
-		"<main>" +
-		linejoin(map(render_item, reversed(items))) +
-		"</main>")
-	with open("templates/index.html", "r") as fp:
-		tpl = fp.read(-1)
-	return tpl.replace("{{BODY}}", body)
+def IF(cond, then):
+	def inner(x):
+		if cond(x): return then(x)
+	return inner
+
+def B(a):
+	def f(b):
+		def g(c):
+			return a(b(c))
+		return g
+	return f
+
+def pipe(x, *fs):
+	for f in fs: x = f(x)
+	return x
+
+def piping(*fs):
+	def inner(x):
+		for f in fs: x = f(x)
+		return x
+	return inner
+
+def pluck(k):
+	def inner(xs):
+		return xs[k]
+	return inner
+
+first = pluck(0)
+second = pluck(1)
+last = pluck(-1)
+
+def prefix(p):
+	def inner(x):
+		return p + x
+	return inner
+
+def map(f):
+	def inner(xs):
+		lst = []
+		for x in xs: lst.append(f(x))
+		return lst
+	return inner
+
+def filter(f):
+	def inner(xs):
+		lst = []
+		for x in xs:
+			if f(x): lst.append(x)
+		return lst
+	return inner
+
+def group(n, margin=None):
+	if margin == None: margin = n//5
+	def inner(xs):
+		g = []
+		while len(xs) > 0:
+			if (len(xs) < n + margin):
+				g.append(xs[:])
+				xs = []
+			else:
+				g.append(xs[:n])
+				xs = xs[:n]
+		return g
+	return inner
+
+def write(x):
+	if not last(x): return
+	with open('render/'+first(x), 'w') as p:
+		print('Making \033[1m\033[92m%s\033[0m' % (first(x),))
+		p.write(last(x))
+
+def niceName(s):
+	def inner(x):
+		if x == 0: return s % ('',)
+		else: return s % ((x+1)*ITEMS,)
+	return inner
+
+def render_index(items):
+	name = first(items.x)
+	posts = last(items.x)
+	prev = first(items.prev.x) if items.prev else None
+	next = first(items.next.x) if items.next else None
+	template = 'templates/frontpage.html' if prev == None else 'templates/index.html'
+	body = (navhead(prev, next) +
+		'<main>' +
+		pipe(posts, reversed, map(render_item), linejoin) +
+		'</main>')
+	with read(template) as fp:
+		template = fp.read(-1)
+	return (name, template.replace('{{BODY}}', body))
 
 def render_item(item):
 	return ('<article id="%s"><span class="data">%s</span>%s</article>' %
 		(guid(item.timestamp), ymd(item.timestamp), item.content))
 
-def render_rss(items, **options):
-	body = linejoin(map(render_item_rss, reversed(items)))
-	with open("templates/rss.xml", "r") as fp:
+def render_rss(x):
+	body = pipe(x, last, reversed, map(render_item_rss), linejoin)
+	with read('templates/rss.xml') as fp:
 		tpl = fp.read(-1)
-	return (tpl
-		.replace("{{PUBDATE}}", rfctime(items[-1].timestamp))
+	return (first(x), tpl
+		.replace("{{PUBDATE}}", rfctime(last(last(x)).timestamp))
 		.replace("{{BODY}}", body))
 
 def render_item_rss(item):
 	g = guid(item.timestamp)
 	return ("<item>" +
 		"<title>New post on %s (%s)</title>" % (CONF["sitename"], g) +
-		"<guid isPermaLink=\"false\">post/%s</guid>" % (g,) +
+		"<guid PermaLink=\"false\">post/%s</guid>" % (g,) +
 		"<pubDate>%s</pubDate>" % (rfctime(item.timestamp),) +
 		"<description>%s</description>" % (escape(absolute_links(item.content)),) +
 		"<link>https://%s.neocities.org/#%s</link>" %(CONF["sitename"], g) +
@@ -68,15 +159,8 @@ def navhead(p=None, n=None, up=False):
 		("<a href=\"%s\">Next →</a>" % (n,) if n else "") +
 		"</nav>")
 
-def ranges(x, lim=CONF["items"]):
-	div, mod = divmod(x, lim)
-	xs = [ range(i*lim, (i+1)*lim) for i in range(div) ]
-	if mod > 20: xs.append(range(div*lim, div*lim + mod))
-	elif mod > 0: xs[-1] = range(xs[-1].start, xs[-1].stop + mod)
-	return xs
-
 def escape(x):
-	for i in [("&", "&amp;"), ("<", "&lt;"), (">", "&gt;")]:
+	for i in [('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;')]:
 		x = x.replace(*i)
 	return x
 
@@ -89,7 +173,7 @@ def int_to_base(x, base):
 	return emptyjoin(reversed(xs))
 
 def absolute_links(x):
-	for i in ["href", "src"]:
+	for i in ['href', 'src']:
 		x = x.replace(
 			'%s="/' % (i,),
 			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
@@ -104,111 +188,62 @@ def item_stream(fp, block_size=2048):
 			data = data[i:]
 		else:
 			x = fp.read(block_size)
-			if x == "": break
+			if x == '': break
 			data += x
-	if not data == "": yield data
+	if not data == '': yield data
 
-def item_count(x):
-	c = { "total": 0 }
-	for i in map(parse, item_stream(x)):
-		c["total"] += 1
-		if not i.ptype in c: c[i.ptype] = 1
-		else: c[i.ptype] += 1
-	x.seek(0)
-	return c
-
-def write(f, x):
-	with open("render/"+f, "w") as p: p.write(x)
-
-def make(target, deps, fn):
-	if FORCE or younger(target, deps):
-		print("Making \033[1m\033[92m%s\033[0m" % (target))
-		fn()
-
-def younger(x, xs):
-	own = os.path.getmtime(x) if os.path.isfile(x) else -1
-	others = max(map(timestamp, xs))
+def younger(x):
+	if FORCE: return True
+	own = pipe(x, first, prefix('render/'), lambda x: os.path.getmtime(x) if os.path.isfile(x) else -1)
+	others = pipe(x, last, map(timestamp), max)
 	return own < others
 
-class Item:
+class Item():
 	def __init__(self, stamp, ptype, content):
 		self.timestamp = int(stamp)
 		self.ptype = ptype
 		self.content = content
 
-class Stream():
-	def __init__(self): self.readers = []
-	def read(self, x): pass
-	def write(self, x):
-		for i in self.readers: i.read(x)
-	def pipe(self, x):
-		self.readers.append(x)
-		return x
-	def end(self, x=None):
-		if x: self.write(x)
-		self.write(StopIteration)
+class DoubleLink():
+	def __init__(self, x):
+		self.x = x
+		self.next = None
+		self.prev = None
+	
+	def append(self, x):
+		self.next = DoubleLink(x)
+		self.next.prev = self
 
-class GroupBy(Stream):
-	def __init__(self, n, margin=20):
-		super().__init__()
-		self.xs = []
-		self.n = n
-		self.margin = margin
-	def read(self, x):
-		if x is StopIteration: return self.end(self.xs)
-		self.xs.append(x)
-		if len(self.xs) == self.n+self.margin:
-			self.write(self.xs[:self.n])
-			self.xs = self.xs[self.n:]
+	def fromList(xs):
+		head = DoubleLink(xs[0])
+		cur = head
+		for x in xs[1:]:
+			cur.append(x)
+			cur = cur.next
+		return head
 
-class Last(Stream):
-	def __init__(self, n):
-		super().__init__()
-		self.xs = []
-		self.n = n
-	def read(self, x):
-		if x is StopIteration: return self.end(self.xs)
-		if len(self.xs) == self.n: self.xs.pop(0)
-		self.xs.append(x)
+	def __iter__(self):
+		self.cur = self
+		return self
 
-class Everything(Stream):
-	def __init__(self):
-		super().__init__()
-		self.xs = []
-	def read(self, x):
-		if x is StopIteration and self.xs:
-			self.write(self.xs)
-			self.xs = []
-		else: self.xs.append(x)
+	def __next__(self):
+		if self.cur != None:
+			val = self.cur
+			self.cur = self.cur.next
+			return val
+		else: raise StopIteration
 
-class Subscriber(Stream):
-	def __init__(self, name, count, pagination=False, render=render_index, initial=None):
-		super().__init__()
-		self.queue = []
-		self.c = None
-		self.p = None
-		self.n = None
-		self.render = render
-		self.initial = initial or render
-		if pagination:
-			for x in ranges(count):
-				self.queue.append(name % (str(x.start),) if x.start > 0 else name % ("",))
-		else: self.queue.append(name)
-
-	def read(self, x):
-		if x is StopIteration: return
-		self.p = self.c
-		self.c = self.queue.pop()
-		self.n = self.queue[-1] if self.queue else None
-		fn = self.render if self.queue else self.initial
-		make(self.c, x, lambda: write(self.c, fn(x, n=self.n, p=self.p, up="/" in self.c)))
-
-def parse(x): return Item(*x.strip().split("\n", 2))
+def parse(x): return Item(*x.strip().split('\n', 2))
 def timestamp(x): return x.timestamp
 def guid(x): return int_to_base(x, 62)
-def ymd(x): return time.strftime("%Y-%m-%d", time.gmtime(x))
-def rfctime(x): return time.strftime("%a, %d %b %Y %H:%M:%S +0000", time.gmtime(x))
-def linejoin(x): return "\n".join(x)
-def emptyjoin(x): return "".join(x)
+def ymd(x): return time.strftime('%Y-%m-%d', time.gmtime(x))
+def rfctime(x): return time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(x))
+def linejoin(x): return '\n'.join(x)
+def emptyjoin(x): return ''.join(x)
+def read(x): return open(x, 'r')
+def tail(xs): return xs[1:]
+def article(x): return x.ptype == 'article'
+def mapFirst(f): return map(lambda x: (f(x[0]), x[1]))
+def value(x): return x.x
 
-if __name__ == "__main__": main("posts", sys.argv[1:])
+if __name__ == '__main__': main('posts', sys.argv[1:])
