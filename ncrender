@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import sys, os, time, json, string
 
-RS = chr(30)
 CONF = json.loads(open('config').read())
 ITEMS = CONF['items']
 DIGITS = string.digits + string.ascii_letters
@@ -18,7 +17,7 @@ def main(pathname, args):
 		enumerate,
 		mapFirst(niceName('index%s.html')),
 		DoubleLink.fromList,
-		filter(B(younger)(value)),
+		filter(piping(value, younger)),
 		map(render_index),
 		map(write))
 	pipe(
@@ -43,13 +42,6 @@ def IF(cond, then):
 	def inner(x):
 		if cond(x): return then(x)
 	return inner
-
-def B(a):
-	def f(b):
-		def g(c):
-			return a(b(c))
-		return g
-	return f
 
 def pipe(x, *fs):
 	for f in fs: x = f(x)
@@ -179,18 +171,8 @@ def absolute_links(x):
 			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
 	return x
 
-def item_stream(fp, block_size=2048):
-	data = fp.read(block_size)
-	while True:
-		i = data.find(RS, 1)
-		if i != -1:
-			yield data[:i]
-			data = data[i:]
-		else:
-			x = fp.read(block_size)
-			if x == '': break
-			data += x
-	if not data == '': yield data
+def item_stream(fp):
+	return fp.read(-1).strip().split('\n\n')
 
 def younger(x):
 	if FORCE: return True
@@ -209,7 +191,7 @@ class DoubleLink():
 		self.x = x
 		self.next = None
 		self.prev = None
-	
+
 	def append(self, x):
 		self.next = DoubleLink(x)
 		self.next.prev = self
