@@ -26,13 +26,6 @@ def main(pathname, args):
 		withFirst('rss.xml'),
 		IF(younger,
 			piping(render_rss, write)))
-	del total
-	pipe(
-		posts,
-		filter(article),
-		withFirst('articles/index.html'),
-		IF(younger,
-			piping(DoubleLink, render_index, write)))
 
 def withFirst(p):
 	def inner(x): return (p, x)
