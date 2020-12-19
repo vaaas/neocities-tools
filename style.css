@@ -1,8 +1,8 @@
-html {
-	background: url("/pics/texture.png"), linear-gradient(to top, #3d2e3b, #766173);
+html
+	{ background: url("/pics/texture.png"), linear-gradient(to top, #3d2e3b, #766173);
 	background-position: top center; }
-body {
-	margin: auto;
+body
+	{ margin: auto;
 	padding: 10px;
 	max-width: 620px;
 	font-family: sans-serif;
@@ -17,55 +17,55 @@ a
 	color: #62A; }
 nav { line-height: 2em; }
 nav > a { margin: 0 1em; }
-article + article {
-	margin-top: 1em;
+article + article
+	{ margin-top: 1em;
 	border-top: 1px solid #bbb;
 	padding-top: 1em; }
 #about { margin-bottom: 3em; }
-article h1 {
-	font-size: 15px;
+article h1
+	{ font-size: 15px;
 	margin: 0; }
 h1 { margin: 0; }
 .data { color: #999; }
-article .data {
-	font-size: 10px;
+article .data
+	{ font-size: 10px;
 	margin: 5px 0 0 10px;
 	float: right; }
-img {
-	display: block;
+img
+	{ display: block;
 	max-width: 100%; }
 body > header, nav, figcaption { text-align: center; }
 body > header { margin: 1em 0; }
 main article p, ul { margin: 0; }
-.emoji {
-	width: 1em;
+img[alt='emoji']
+	{ width: 1em;
 	display: inline; }
-.fullwidth {
-	margin: 0 -10px;
+.fullwidth
+	{ margin: 0 -10px;
 	max-width: calc(20px + 100%); }
-.slide {
-	white-space: nowrap;
+.slide
+	{ white-space: nowrap;
 	overflow: auto; }
 .slide > img { display: inline-block; }
-footer {
-	border-top: 1px solid #bbb;
+footer
+	{ border-top: 1px solid #bbb;
 	margin-top: 0.5em;
 	padding-top: 0.5em;
 	text-align: center;
 	font-style: oblique; }
-hr {
-	border: none;
+hr
+	{ border: none;
 	border-top: 1px solid #bbb; }
-blockquote {
-	padding-left: 1em;
+blockquote
+	{ padding-left: 1em;
 	margin-left: 1em;
 	border-left: 1px solid #bbb; }
 code { white-space: pre-wrap; }
-.imgtxt {
-	position: relative;
+.imgtxt
+	{ position: relative;
 	margin: 0 -10px; }
-.imgtxt h1, .imgtxt h2, .imgtxt h3 {
-	font-variant: small-caps;
+.imgtxt h1, .imgtxt h2, .imgtxt h3
+	{ font-variant: small-caps;
 	line-height: 1em;
 	font-size: 25px;
 	position: absolute;
@@ -78,11 +78,11 @@ code { white-space: pre-wrap; }
 	background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,0.5)); }
 li { margin-left: 1em; }
 figure { margin: auto; }
-figcaption {
-	font-style: italic;
+figcaption
+	{ font-style: italic;
 	margin: 0.5em auto;
 	max-width: 75%; }
-.icon {
-	margin: auto;
+.icon
+	{ margin: auto;
 	max-width: 160px;
 	border-radius: 50%; }
