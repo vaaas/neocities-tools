@@ -106,43 +106,72 @@ def render_index(items):
 	posts = last(items.x)
 	prev = first(items.prev.x) if items.prev else None
 	next = first(items.next.x) if items.next else None
-	template = 'templates/frontpage.html' if prev == None else 'templates/index.html'
-	body = (navhead(prev, next) +
-		'<main>' +
-		pipe(posts, reversed, map(render_item), linejoin) +
-		'</main>')
-	with read(template) as fp:
-		template = fp.read(-1)
-	return (name, template.replace('{{BODY}}', body))
+
+	main = E('main')
+	for x in pipe(posts, reversed, map(render_item)):
+		main.child(x)
+	nav = navhead(prev, next)
+	links = E('nav')
+	for x in CONF['links']:
+		links.child(E('a').prop('href', CONF['links'][x]).text(x))
+
+	return E('html').prop('lang', 'en-gb')
+	.child(E('head')
+		.child(E('meta').prop('charset', 'utf-8'))
+		.child(E('meta').prop('viewport', 'width=device-width, initial-scale=1.0'))
+		.child(E('meta').prop('url', 'https://%.neocities.org' % (CONF["sitename"],)))
+		.child(E('meta').prop('author', CONF['author']))
+		.child(E('meta').prop('description', CONF['title']))
+		.child(E('link').prop('rel', 'stylesheet').prop('href', '/style.css'))
+		.child(E('link').prop('rel', 'icon').prop('href', '/favicon.ico?v=2'))
+		.child(E('link').prop('rel', 'alternate').prop('href', '/rss.xml').prop('type', 'application/rss+xml'))
+		.child(E('title').text(CONF['title'])))
+	.child(E('body')
+		.child(E('a').prop('href', '/')
+			.child(E('img').prop('alt', 'website banner').prop('class', 'icon').prop('src', '/pics/ruri_thinking_icon.jpg')))
+		.child(E('header')
+			.child(E('h1').text(CONF['title'])
+				.child(E('a').prop('href', '/rss.xml')
+					.child(E('img').prop('alt', 'emoji').prop('src', '/pics/feed-icon.svg'))))
+			.child(links))
+		.child(E('section').prop('id', 'about').text(CONF['about']))
+		.child(nav)
+		.child(main))
+	.serialise()
 
 def render_item(item):
-	return ('<article id="%s"><span class="data">%s</span>%s</article>' %
-		(guid(item.timestamp), ymd(item.timestamp), item.content))
+	return E('article').prop('id', item.timestamp)
+	.child(E('span').prop('class', 'data').text(ymd(item.timestamp)))
+	.text(item.content)
 
 def render_rss(x):
-	body = pipe(x, last, reversed, map(render_item_rss), linejoin)
-	with read('templates/rss.xml') as fp:
-		tpl = fp.read(-1)
-	return (first(x), tpl
-		.replace("{{PUBDATE}}", rfctime(last(last(x)).timestamp))
-		.replace("{{BODY}}", body))
+	channel = E('channel')
+		.child(E('title').text(CONF['title']))
+		.child(E('links').text('https://%.neocities.org' % (CONF['sitename'],)))
+		.child(E('atom:link').prop('href', 'https://%s.neocities.org/rss.xml' % (CONF['sitename'],)).prop('rel', 'self').prop('type', 'application/rss+xml'))
+		.child(E('description').text(CONF['title']))
+		.child(E('pubDate').text(rfctime(last(last(x)).timestamp)))
+		.child(E('language').text('en-gb'))
+		.child(E('ttl').text('1440'))
+	for x in pipe(x, last, reversed, map(render_item_rss)):
+		channel.append(x)
+	return E('rss').prop('version', '2.0').prop('xmlns:atom', 'http://www.w3.org/2005/Atom').child(child).serialise()
 
 def render_item_rss(item):
 	g = guid(item.timestamp)
-	return ("<item>" +
-		"<title>New post on %s (%s)</title>" % (CONF["sitename"], g) +
-		"<guid PermaLink=\"false\">post/%s</guid>" % (g,) +
-		"<pubDate>%s</pubDate>" % (rfctime(item.timestamp),) +
-		"<description>%s</description>" % (escape(absolute_links(item.content)),) +
-		"<link>https://%s.neocities.org/#%s</link>" %(CONF["sitename"], g) +
-		"</item>")
+	return E('item')
+	.child(E('title').text('New post on %s (%s)' % (CONF['sitename'], g)))
+	.child(E('guid').prop('Permalink', 'false').text('post/%s' % (g,)))
+	.child(E('pubDate').text(rfctime(item.timestamp)))
+	.child(E('description').text(escape(absolute_links(item.content))))
+	.child(E('link').text('https://%s.neocities.org/#%s' % (CONF['sitename'], g)))
 
 def navhead(p=None, n=None, up=False):
-	return ("<nav>" +
-		("<a href=\"%s\">← Previous</a>" % (p,) if p else "") +
-		("<a href=\"../\">↑ Up</a>" if up else "") +
-		("<a href=\"%s\">Next →</a>" % (n,) if n else "") +
-		"</nav>")
+	x = E('nav')
+	if p: x.child(E('a').prop('href', p).text('← Previous'))
+	if up: x.child(E('a').prop('href', '../').text('↑ Up'))
+	if n: x.child(E('a').prop('href', n).text('Next →'))
+	return x
 
 def escape(x):
 	for i in [('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;')]:
@@ -208,12 +237,42 @@ class DoubleLink():
 			return val
 		else: raise StopIteration
 
+class E():
+	def __init__(self, x):
+		self.name = x
+		self.props = dict()
+		self.children = []
+	def prop(self, p, v):
+		self.props[p] = v
+		return self
+	def child(self, x):
+		self.children.append(x)
+		return self
+	def text(self, x):
+		return self.child(TextNode(x))
+	def serialise(self):
+		parts = ['<', self.name]
+		for k in in self.props:
+			parts.append('%s="%s"' % (k, self.props[k]))
+		if len(self.children) > 0:
+			parts.append('>')
+			for x in self.children: self.children(x.serialise())
+			parts.extend(['</', self.name, '>'])
+		else:
+			parts.append('/>')
+		return emptyjoin(parts)
+
+class TextNode():
+	def __init__(self, x):
+		self.text = x
+	def serialise(self):
+		return self.text
+
 def parse(x): return Item(*x.strip().split('\n', 2))
 def timestamp(x): return x.timestamp
 def guid(x): return int_to_base(x, 62)
 def ymd(x): return time.strftime('%Y-%m-%d', time.gmtime(x))
 def rfctime(x): return time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(x))
-def linejoin(x): return '\n'.join(x)
 def emptyjoin(x): return ''.join(x)
 def read(x): return open(x, 'r')
 def tail(xs): return xs[1:]
