@@ -16,17 +16,17 @@ def main(pathname, args):
 		reversed,
 		enumerate,
 		mapFirst(niceName('index%s.html')),
+		list,
 		DoubleLink.fromList,
 		filter(PP(value, younger)),
 		map(render_index),
-		map(serialise),
 		map(write))
 	P(
 		total,
 		last,
 		withFirst('rss.xml'),
 		IF(younger,
-			PP(render_rss, serialise, write)))
+			PP(render_rss, write)))
 
 def withFirst(p):
 	def inner(x): return (p, x)
@@ -106,10 +106,11 @@ def niceName(s):
 	return inner
 
 def render_index(items):
+	name = first(items.x)
 	posts = last(items.x)
 	prev = first(items.prev.x) if items.prev else None
 	next = first(items.next.x) if items.next else None
-	return ('html', (('lang', 'en-gb')), (
+	tree = ('html', (('lang', 'en-gb')), (
 		('head', None, (
 			('meta', (('charset', 'utf-8')), None),
 			('meta', (('viewport', 'width=device-width, initial-scale=1.0')), None),
@@ -145,6 +146,7 @@ def render_index(items):
 			('main', None, P(posts, reversed, map(render_index))),
 		)),
 	))
+	return (name, serialise(tree))
 
 def render_item(item):
 	return ('article', (('id', item.timestamp)), (
@@ -153,7 +155,7 @@ def render_item(item):
 	))
 
 def render_rss(x):
-	return ('rss', (
+	tree = ('rss', (
 		('version', '2.0'),
 		('xmlns:atom', 'http://www.w3.org/2005/Atom')), (
 			('channel', None, (
@@ -169,7 +171,8 @@ def render_rss(x):
 				('language', None, ('en-gb',)),
 				('ttl', None, ('1440',)),
 				*P(x, last, reversed, map(render_item_rss)),
-		))))
+	))))
+	return (first(x), serialise(tree))
 
 def render_item_rss(item):
 	g = guid(item.timestamp)
@@ -236,6 +239,38 @@ def serialise(root):
 		parts.append('/>')
 	return emptyjoin(parts)
 
+
+class DoubleLink():
+	def __init__(self, x):
+		self.x = x
+		self.next = None
+		self.prev = None
+		self.cur = None
+
+	def append(self, x):
+		self.next = DoubleLink(x)
+		self.next.prev = self
+
+	@staticmethod
+	def fromList(xs):
+		head = DoubleLink(xs[0])
+		cur = head
+		for x in xs[1:]:
+			cur.append(x)
+			cur = cur.next
+		return head
+
+	def __iter__(self):
+		self.cur = self
+		return self
+
+	def __next__(self):
+		if not self.cur is None:
+			val = self.cur
+			self.cur = self.cur.next
+			return val
+		else: raise StopIteration
+
 def parse(x): return Item(*x.strip().split('\n', 2))
 def timestamp(x): return x.timestamp
 def guid(x): return int_to_base(x, 62)
@@ -245,7 +280,7 @@ def emptyjoin(x): return ''.join(x)
 def read(x): return open(x, 'r')
 def tail(xs): return xs[1:]
 def article(x): return x.ptype == 'article'
-def mapFirst(f): return map(lambda x: (f(x[0]), x[1]))
+def mapFirst(f): return map(lambda x: (f(first(x)), second(x)))
 def value(x): return x.x
 
 if __name__ == '__main__': main('posts', sys.argv[1:])
