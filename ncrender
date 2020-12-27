@@ -111,8 +111,6 @@ def render_index(items):
 	posts = last(items.x)
 	prev = first(items.prev.x) if items.prev else None
 	next = first(items.next.x) if items.next else None
-
-
 	return ('html', (('lang', 'en-gb')), (
 		('head', None, (
 			('meta', (('charset', 'utf-8')), None),
@@ -145,7 +143,7 @@ def render_index(items):
                         ('section', (('id', 'about')), (CONF['about'],)),
                 	navhead(prev, next),
                 	('main', None, P(posts, reversed, map(render_index))),
-                ),
+                )),
 	))
 
 def render_item(item):
