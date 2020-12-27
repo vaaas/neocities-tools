@@ -66,7 +66,7 @@ def output(x): return subprocess.check_output(x, universal_newlines=True)
 def size(x): return os.stat(x).st_size
 def head(x): return x[0]
 def heads(x): return set(map(head, x))
-def yes_p(x): return x.lower() in ["y", "ye", "yes", "yeah", "yup"]
+def yes_p(x): return x.strip().lower() in ('y', 'ye', 'yes', 'yeah', 'yup', 'ok', 'okay')
 def commajoin(x): return ", ".join(x)
 
 if __name__ == "__main__": sys.exit(main(sys.argv))
