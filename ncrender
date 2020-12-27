@@ -19,13 +19,14 @@ def main(pathname, args):
 		DoubleLink.fromList,
 		filter(PP(value, younger)),
 		map(render_index),
+		map(serialise),
 		map(write))
 	P(
 		total,
 		last,
 		withFirst('rss.xml'),
 		IF(younger,
-			PP(render_rss, write)))
+			PP(render_rss, serialise, write)))
 
 def withFirst(p):
 	def inner(x): return (p, x)
@@ -81,11 +82,11 @@ def tap(f):
 	return inner
 
 def group(n, margin=None):
-	if margin == None: margin = n//5
+	if margin is None: margin = n//5
 	def inner(xs):
 		g = []
 		while len(xs) > 0:
-			if (len(xs) < n + margin):
+			if len(xs) < n + margin:
 				g.append(xs[:])
 				xs = []
 			else:
@@ -101,13 +102,10 @@ def write(x):
 		p.write(last(x))
 
 def niceName(s):
-	def inner(x):
-		if x == 0: return s % ('',)
-		else: return s % ((x+1)*ITEMS,)
+	def inner(x): return s % ('' if x == 0 else (x+1)*ITEMS,)
 	return inner
 
 def render_index(items):
-	name = first(items.x)
 	posts = last(items.x)
 	prev = first(items.prev.x) if items.prev else None
 	next = first(items.next.x) if items.next else None
@@ -115,7 +113,7 @@ def render_index(items):
 		('head', None, (
 			('meta', (('charset', 'utf-8')), None),
 			('meta', (('viewport', 'width=device-width, initial-scale=1.0')), None),
-			('meta', (('url', 'https://%.neocities.org' % (CONF["sitename"],))), None),
+			('meta', (('url', 'https://%s.neocities.org' % (CONF['sitename'],))), None),
 			('meta', (('author', CONF['author'])), None),
 			('meta', (('description', CONF['title'])), None),
 			('link', (('rel', 'stylesheet'), ('href', '/style.css')), None),
@@ -123,27 +121,29 @@ def render_index(items):
 			('link', (('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml')), None),
 			('title', None, (CONF['title'],)),
 		)),
-                ('body', None, (
-                        ('a', (('href', '/')),
-                                (('img', (
-                                        ('alt', 'website banner'),
-                                        ('class', 'icon'),
-                                        ('src', '/pics/ruri_thinking_icon.jpg')),
-                                        None))),
-                        ('header', None, (
-                                ('h1', None, (
-                                        CONF['title'],
-                                        ('a', (('href', '/rss.xml')),
-                                                (('img', (
-                                                        ('alt', 'emoji'),
-                                                        ('src', '/pics/feed-icon.svg')),
-                                                        None))))),
-                        	('nav', None, P(CONF['links'], map(lambda x: ('a', (('href', CONF['links'][x])), x)))),
-                        )),
-                        ('section', (('id', 'about')), (CONF['about'],)),
-                	navhead(prev, next),
-                	('main', None, P(posts, reversed, map(render_index))),
-                )),
+		('body', None, (
+			('a', (('href', '/')),
+				(('img', (
+					('alt', 'website banner'),
+					('class', 'icon'),
+					('src', '/pics/ruri_thinking_icon.jpg')),
+					None))),
+			('header', None, (
+				('h1', None, (
+					CONF['title'],
+					('a', (('href', '/rss.xml')),
+						(('img', (
+							('alt', 'emoji'),
+							('src', '/pics/feed-icon.svg')),
+							None))))),
+				('nav', None, P(
+					CONF['links'],
+					map(lambda x: ('a', (('href', CONF['links'][x])), (x,))))),
+			)),
+			('section', (('id', 'about')), (CONF['about'],)),
+			navhead(prev, next),
+			('main', None, P(posts, reversed, map(render_index))),
+		)),
 	))
 
 def render_item(item):
@@ -153,23 +153,23 @@ def render_item(item):
 	))
 
 def render_rss(x):
-	return serialise(('rss', (
+	return ('rss', (
 		('version', '2.0'),
 		('xmlns:atom', 'http://www.w3.org/2005/Atom')), (
-                        ('channel', None, (
-                                ('title', None, (CONF['title'],)),
-                                ('links', None, ('https://%.neocities.org' % (CONF['sitename'],),)),
-                                ('atom:link', (
-                                        ('href', 'https://%s.neocities.org/rss.xml' % (CONF['sitename'],)),
-                                        ('rel', 'self'),
-                                        ('type', 'application/rss+xml')),
-                                        None)
-                                ('description', None, (CONF['title'],)),
-                                ('pubDate', None, (rfctime(last(last(x)).timestamp)),),
-                                ('language', None, ('en-gb',)),
-                                ('ttl', None, ('1440',)),
-                                *P(x, last, reversed, map(render_item_rss)),
-		)))))
+			('channel', None, (
+				('title', None, (CONF['title'],)),
+				('links', None, ('https://%s.neocities.org' % (CONF['sitename'],),)),
+				('atom:link', (
+					('href', 'https://%s.neocities.org/rss.xml' % (CONF['sitename'],)),
+					('rel', 'self'),
+					('type', 'application/rss+xml')),
+					None),
+				('description', None, (CONF['title'],)),
+				('pubDate', None, (rfctime(last(last(x)).timestamp)),),
+				('language', None, ('en-gb',)),
+				('ttl', None, ('1440',)),
+				*P(x, last, reversed, map(render_item_rss)),
+		))))
 
 def render_item_rss(item):
 	g = guid(item.timestamp)
@@ -224,11 +224,11 @@ class Item():
 		self.content = content
 
 def serialise(root):
-	if (type(root) === str) return root
+	if isinstance(root, str): return root
 	parts = ['<', first(root)]
-	if second(root) !== None:
+	if not second(root) is None:
 		parts.extend(map(lambda x: '%s="%s"' % (first(x), second(x)))(second(root)))
-	if last(root) !== None and len(last(root)) > 0:
+	if (not last(root) is None) and len(last(root)) > 0:
 		parts.append('>')
 		parts.extend(map(serialise)(last(root)))
 		parts.extend(('</', first(root), '>'))
