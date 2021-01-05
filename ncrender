@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 import sys, os, time, json, string
-from typing import Callable, Iterable, Union, Any, Tuple
+from typing import Callable, Iterable, Union, Any, Tuple, List, Optional
 
 CONF = json.loads(open('config').read())
-ITEMS = CONF['items']
-DIGITS = string.digits + string.ascii_letters
-FORCE = False
+ITEMS: int = CONF['items']
+DIGITS: str = string.digits + string.ascii_letters
+FORCE: bool = False
 
 #types
 MonoCallable = Callable[[Any], Any]
 Item = Tuple[int, str, str]
 Page = Iterable[Tuple[str, Iterable[Item]]]
 Prop = Tuple[str, str]
-Elem = Tuple[str, Union[None, Iterable[Prop]], Union[None, Iterable[Union[str, Tuple]]]]
+Elem = Tuple[str, Optional[Iterable[Prop]], Optional[Iterable[Union[str, Tuple]]]]
 
-def main(pathname: str, args: Iterable) -> None:
+def main(pathname: str, args: list) -> None:
 	global FORCE
-	FORCE = args and args[0] == '-f'
+	FORCE = len(args) > 0 and args[0] == '-f'
 	posts: Iterable[Item] = P(pathname, read, item_stream, map(parse))
 	total: Iterable[Iterable[Item]] = P(posts, sort(first), group(ITEMS), tuple)
 	P(
@@ -45,16 +45,16 @@ def IF(cond: Callable[[Any], bool], then: MonoCallable) -> MonoCallable:
 		else: return x
 	return inner
 
-def P(x: Any, *fs: Iterable[MonoCallable]) -> Any:
+def P(x: Any, *fs: MonoCallable) -> Any:
 	for f in fs: x = f(x)
 	return x
 
-def PP(*fs: Iterable[MonoCallable]) -> MonoCallable:
+def PP(*fs: MonoCallable) -> MonoCallable:
 	def inner(x: Any) -> Any: return P(x, *fs)
 	return inner
 
-def pluck(k: int) -> Callable[[list], Any]:
-	def inner(xs: list) -> Any:
+def pluck(k: int) -> Callable[[Union[list, tuple]], Any]:
+	def inner(xs: Union[list, tuple]) -> Any:
 		return xs[k]
 	return inner
 
@@ -102,8 +102,8 @@ def write(x: Tuple[str, str]) -> None:
 		print('Making \033[1m\033[92m%s\033[0m' % (first(x),))
 		p.write(last(x))
 
-def niceName(s: str) -> Callable[[str], str]:
-	def inner(x: str): return s % ('' if x == 0 else (x+1)*ITEMS,)
+def niceName(s: str) -> Callable[[int], str]:
+	def inner(x: int) -> str: return s % ('' if x == 0 else (x+1)*ITEMS,)
 	return inner
 
 def sort(f: MonoCallable) -> Callable[[Iterable], list]:
@@ -111,12 +111,12 @@ def sort(f: MonoCallable) -> Callable[[Iterable], list]:
 		return sorted(x, key=f)
 	return inner
 
-def render_index(items: Tuple[Page, Union[Page, None], Union[Page, None]]) -> Tuple[str, str]:
-	name = first(first(items))
+def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[str, str]:
+	name: str = first(first(items))
 	posts = last(first(items))
 	prev = first(second(items)) if second(items) else None
 	next = first(second(items)) if last(items) else None
-	tree = ('html', (('lang', 'en-gb'),), (
+	tree: Elem = ('html', (('lang', 'en-gb'),), (
 		('head', None, (
 			('meta', (('charset', 'utf-8'),), None),
 			('meta', (('name', 'viewport'), ('content', 'width=device-width, initial-scale=1.0'),), None),
@@ -162,7 +162,7 @@ def render_item(item: Item) -> Elem:
 	))
 
 def render_rss(x: Page) -> Tuple[str, str]:
-	tree = ('rss', (
+	tree: Elem = ('rss', (
 		('version', '2.0'),
 		('xmlns:atom', 'http://www.w3.org/2005/Atom')), (
 			('channel', None, (
@@ -183,7 +183,7 @@ def render_rss(x: Page) -> Tuple[str, str]:
 	return (first(x), '<?xml version="1.0" encoding="UTF-8" ?>'+serialise(tree))
 
 def render_item_rss(item: Item) -> Elem:
-	g = guid(first(item))
+	g: str = guid(first(item))
 	return ('item', None, (
 		('title', None, ('New post on %s (%s)' % (CONF['sitename'], g),)),
 		('guid', (('isPermalink', 'false')), ('post/%s' % (g,),)),
@@ -192,13 +192,13 @@ def render_item_rss(item: Item) -> Elem:
 		('link', None, ('https://%s.neocities.org/#%s' % (CONF['sitename'], g),)),
 	))
 
-def navhead(p=None, n=None, up=False) -> Elem:
-	children = []
-	if p: children.append(('a', (('href', p)), ('← Previous',)))
-	if up: children.append(('a', (('href', '../')),  ('↑ Up',)))
-	if n: children.append(('a', (('href', n)), ('Next →',)))
+def navhead(p=None, n=None, up=False) -> Union[Elem, str]:
+	children: List[Elem] = []
+	if p: children.append(('a', [('href', p)], ['← Previous']))
+	if up: children.append(('a', [('href', '../')],  ['↑ Up']))
+	if n: children.append(('a', [('href', n)], ['Next →']))
 	if len(children) == 0: return ''
-	else: return ('nav', None, tuple(children))
+	else: return ('nav', None, children)
 
 def escape(x: str) -> str:
 	for i in (('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;')):
@@ -220,7 +220,7 @@ def absolute_links(x: str) -> str:
 			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
 	return x
 
-def item_stream(fp: object) -> Iterable[str]:
+def item_stream(fp) -> Iterable[str]:
 	return fp.read(-1).strip().split('\n\n')
 
 def younger(x: Page) -> bool:
@@ -244,8 +244,7 @@ def serialise(x: Union[Elem, str]) -> str:
 
 def parse(x: str) -> Item:
 	p = x.strip().split('\n', 2)
-	p[0] = int(p[0])
-	return tuple(p)
+	return (int(p[0]), p[1], p[2])
 
 def double_link(xs: Iterable[Any]) -> Iterable[Tuple[Any, Any, Any]]:
 	a = None
