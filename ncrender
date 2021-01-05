@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import sys, os, time, json, string
-from typing import Callable, Iterable, Union, Any, Tuple, List, Optional, TextIO
+from typing import Iterable, Union, Any, Tuple, List, Optional, TextIO
 
 CONF = json.loads(open('config').read())
 ITEMS: int = CONF['items']
@@ -53,41 +53,33 @@ def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[st
 	posts: List[Item] = items[0][1]
 	prev: Union[str, None] = items[1][0] if isinstance(items[1], tuple) else None
 	next: Union[str, None] = items[2][0] if isinstance(items[2], tuple) else None
-	tree: Elem = ('html', (('lang', 'en-gb'),), (
-		('head', None, (
-			('meta', (('charset', 'utf-8'),), None),
-			('meta', (('name', 'viewport'), ('content', 'width=device-width, initial-scale=1.0'),), None),
-			('meta', (('name', 'url'), ('content', 'https://%s.neocities.org' % (CONF['sitename'],)),), None),
-			('meta', (('name', 'author'), ('content', CONF['author']),), None),
-			('meta', (('name', 'description'), ('content', CONF['title']),), None),
-			('link', (('rel', 'stylesheet'), ('href', '/style.css'),), None),
-			('link', (('rel', 'icon'), ('href', '/favicon.ico?v=2'),), None),
-			('link', (('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml'),), None),
-			('title', None, (CONF['title'],)),
-		)),
-		('body', None, (
-			('a', (('href', '/'),),
-				(('img', (
-					('alt', 'website banner'),
-					('class', 'icon'),
-					('src', '/pics/ruri_thinking_icon.jpg')),
-					None),)),
-			('header', None, (
-				('h1', None, (
+	tree: Elem = ('html', [ ('lang', 'en-gb') ], [
+		('head', None, [
+			('meta', [ ('charset', 'utf-8') ], None),
+			('meta', [ ('name', 'viewport'), ('content', 'width=device-width, initial-scale=1.0') ], None),
+			('meta', [ ('name', 'url'), ('content', 'https://%s.neocities.org' % (CONF['sitename'],)) ], None),
+			('meta', [ ('name', 'author'), ('content', CONF['author']) ], None),
+			('meta', [ ('name', 'description'), ('content', CONF['title']) ], None),
+			('link', [ ('rel', 'stylesheet'), ('href', '/style.css') ], None),
+			('link', [ ('rel', 'icon'), ('href', '/favicon.ico?v=2') ], None),
+			('link', [ ('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml') ], None),
+			('title', None, [ CONF['title'] ]),
+		]),
+		('body', None, [
+			('header', None, [
+				imglink(href='/', src='/pics/ruri_thinking_icon.jpg', alt='icon'),
+				('h1', None, [
 					CONF['title'],
 					' ',
-					('a', (('href', '/rss.xml'),),
-						(('img', (
-							('alt', 'emoji'),
-							('src', '/pics/feed-icon.svg')),
-							None),)),)),
+					imglink(href='/rss.xml', src='/pics/feed-icon.svg', alt='rss')
+				]),
 				('nav', None, map(lambda x: ('a', [('href', CONF['links'][x])], [x]), CONF['links'])),
-			)),
-			('section', (('id', 'about'),), (CONF['about'],)),
+			]),
+			('section', [ ('id', 'about') ], [ CONF['about'] ]),
 			navhead(prev, next),
-			('main', None, map(render_item, reversed(posts))),
-		)),
-	))
+			('main', None, (render_item(x) for x in reversed(posts))),
+		]),
+	])
 	return (name, '<!DOCTYPE html>'+serialise(tree))
 
 def render_item(item: Item) -> Elem:
@@ -134,6 +126,11 @@ def navhead(p: Optional[str] = None, n: Optional[str] = None, up: bool = False) 
 	if n: children.append(('a', [('href', n)], ['Next →']))
 	if len(children) == 0: return ''
 	else: return ('nav', None, children)
+
+def imglink(href: str, src: str, alt: Optional[str]) -> Elem:
+	imgprops: List[Prop] = [ ('src', src) ]
+	if alt is not None: imgprops.append(('alt', alt))
+	return ('a', [('href', href)], [ ('img', imgprops, None) ])
 
 def escape(x: str) -> str:
 	for i in (('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;')):
