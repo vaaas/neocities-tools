@@ -1,72 +1,73 @@
 #!/usr/bin/env python3
 import sys, os, json, subprocess
 from getpass import getpass
+from typing import Set, List, Any, Iterable, Tuple
 
-CONF = json.loads(open("config").read())
+CONF = json.loads(open('config').read())
 
-def main(args):
+def main(args: List[str]):
 	if len(args) >= 2:
 		os.chdir(args[1])
-	elif os.path.isdir("render"):
-		os.chdir("render")
+	elif os.path.isdir('render'):
+		os.chdir('render')
 	else:
-		raise Exception("no valid render directory")
+		raise Exception('no valid render directory')
 
-	user = CONF["sitename"]
-	print("Sitename is", user)
-	password = getpass("Password: ")
-	remote = remote_files(user, password)
-	local = [ (os.path.relpath(x, "."), size(x)) for x in walk_files(".") ]
-	remove = heads(remote).difference(heads(local))
-	add = heads(set(local).difference(set(remote)))
+	user: str = CONF['sitename']
+	print('Sitename is', user)
+	password: str = getpass('Password: ')
+	remote: List[Tuple[str, int]] = remote_files(user, password)
+	local: List[Tuple[str, int]] = [ (os.path.relpath(x, '.'), size(x)) for x in walk_files('.') ]
+	remove: Set[str] = heads(remote).difference(heads(local))
+	add: Set[str] = heads(set(local).difference(set(remote)))
 
 	if remove:
-		print("Deleting", commajoin(remove))
-		if yes_p(input("Proceed? [y/n] > ")):
+		print('Deleting', commajoin(remove))
+		if yes_p(input('Proceed? [y/n] > ')):
 			remove_remote(remove, user, password)
-			print("Done")
-	else: print("Nothing to delete")
+			print('Done')
+	else: print('Nothing to delete')
 
 	if add:
-		print("Uploading", commajoin(add))
-		if yes_p(input("Proceed? [y/n] > ")):
+		print('Uploading', commajoin(add))
+		if yes_p(input('Proceed? [y/n] > ')):
 			upload(add, user, password)
-			print("Done")
-	else: print("Nothing to upload")
+			print('Done')
+	else: print('Nothing to upload')
 
-def remote_files(user, password):
-	args = ["/usr/bin/curl", "https://%s:%s@neocities.org/api/list" % (user, password)]
-	x = json.loads(output(args))
-	if x["result"] != "success": raise Exception("Getting remote files failed")
-	return [ (x["path"], x["size"]) for x in x["files"] if not x["is_directory"] ]
+def remote_files(user: str, password: str) -> List[Tuple[str, int]]:
+	args: List[str] = ['/usr/bin/curl', 'https://%s:%s@neocities.org/api/list' % (user, password)]
+	x: dict = json.loads(output(args))
+	if x['result'] != 'success': raise Exception('Getting remote files failed')
+	return [ (x['path'], x['size']) for x in x['files'] if not x['is_directory'] ]
 
-def remove_remote(xs, user, password):
-	args = ["/usr/bin/curl"]
+def remove_remote(xs: Iterable[str], user: str, password: str):
+	args = ['/usr/bin/curl']
 	for x in xs:
-		args.append("-d")
-		args.append("filenames[]=" + x)
-	args.append("https://%s:%s@neocities.org/api/delete" % (user, password))
+		args.append('-d')
+		args.append('filenames[]=' + x)
+	args.append('https://%s:%s@neocities.org/api/delete' % (user, password))
 	run(args)
 
-def upload(xs, user, password):
-	args = ["/usr/bin/curl"]
+def upload(xs: Iterable[str], user: str, password: str):
+	args = ['/usr/bin/curl']
 	for x in xs:
-		args.append("-F")
-		args.append("%s=@%s" % (x, x))
-	args.append("https://%s:%s@neocities.org/api/upload" % (user, password))
+		args.append('-F')
+		args.append('%s=@%s' % (x, x))
+	args.append('https://%s:%s@neocities.org/api/upload' % (user, password))
 	run(args)
 
-def walk_files(x):
+def walk_files(x: str) -> Iterable[str]:
 	for root, dirs, files in os.walk(x):
 		for i in files:
 			yield os.path.join(root, i)
 
-def run(x): subprocess.call(x, stdout=sys.stdout, stderr=sys.stderr)
-def output(x): return subprocess.check_output(x, universal_newlines=True)
-def size(x): return os.stat(x).st_size
-def head(x): return x[0]
-def heads(x): return set(map(head, x))
-def yes_p(x): return x.strip().lower() in ('y', 'ye', 'yes', 'yeah', 'yup', 'ok', 'okay')
-def commajoin(x): return ", ".join(x)
+def run(x: List[str]): subprocess.call(x, stdout=sys.stdout, stderr=sys.stderr)
+def output(x: List[str]) -> str: return subprocess.check_output(x, universal_newlines=True)
+def size(x: str) -> int: return os.stat(x).st_size
+def head(x: List) -> Any: return x[0]
+def heads(x: Iterable) -> set: return set(map(head, x))
+def yes_p(x: str) -> bool: return x.strip().lower() in ('y', 'ye', 'yes', 'yeah', 'yup', 'ok', 'okay')
+def commajoin(x: Iterable) -> str: return ', '.join(x)
 
-if __name__ == "__main__": sys.exit(main(sys.argv))
+if __name__ == '__main__': sys.exit(main(sys.argv))
