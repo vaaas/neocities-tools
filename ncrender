@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import sys, os, time, json, string
-from typing import Callable, Iterable, Union, Any, Tuple, List, Optional
+from typing import Callable, Iterable, Union, Any, Tuple, List, Optional, TextIO
 
 CONF = json.loads(open('config').read())
 ITEMS: int = CONF['items']
@@ -8,50 +8,29 @@ DIGITS: str = string.digits + string.ascii_letters
 FORCE: bool = False
 
 #types
-MonoCallable = Callable[[Any], Any]
 Item = Tuple[int, str, str]
-Page = Iterable[Tuple[str, Iterable[Item]]]
+Page = Tuple[str, List[Item]]
 Prop = Tuple[str, str]
 Elem = Tuple[str, Optional[Iterable[Prop]], Optional[Iterable[Union[str, Tuple]]]]
 
 def main(pathname: str, args: list) -> None:
 	global FORCE
 	FORCE = len(args) > 0 and args[0] == '-f'
-	posts: Iterable[Item] = P(pathname, read, item_stream, map(parse))
-	total: Iterable[Iterable[Item]] = P(posts, sort(first), group(ITEMS), tuple)
-	P(
-		total,
-		reversed,
-		enumerate,
-		mapFirst(niceName('index%s.html')),
-		double_link,
-		filter(PP(first, younger)),
-		map(render_index),
-		each(write))
-	P(
-		total,
-		last,
-		withFirst('rss.xml'),
-		IF(younger,
-			PP(render_rss, write)))
+	posts: Iterable[Item] = map(parse, item_stream(read(pathname)))
+	total: List[List[Item]] = list(group(ITEMS, sorted(posts, key=first)))
 
-def withFirst(p: Any) -> Callable[[Any], Tuple[Any, Any]]:
-	def inner(x: Any) -> Tuple[Any, Any]: return (p, x)
-	return inner
+	x: Iterable[Tuple[str, str]] = (
+		map(render_index,
+		filter(lambda x: younger(first(x)),
+		double_link
+		(mapFirst(niceName('index%s.html'),
+		enumerate
+		(reversed
+		(total)))))))
+	for i in x: write(i)
 
-def IF(cond: Callable[[Any], bool], then: MonoCallable) -> MonoCallable:
-	def inner(x: Any) -> Any:
-		if cond(x): return then(x)
-		else: return x
-	return inner
-
-def P(x: Any, *fs: MonoCallable) -> Any:
-	for f in fs: x = f(x)
-	return x
-
-def PP(*fs: MonoCallable) -> MonoCallable:
-	def inner(x: Any) -> Any: return P(x, *fs)
-	return inner
+	y: Tuple[str, List[Item]] = ('rss.xml', total[-1])
+	if younger(y): write(render_rss(y))
 
 def pluck(k: int) -> Callable[[Union[list, tuple]], Any]:
 	def inner(xs: Union[list, tuple]) -> Any:
@@ -60,62 +39,32 @@ def pluck(k: int) -> Callable[[Union[list, tuple]], Any]:
 
 first = pluck(0)
 second = pluck(1)
-last = pluck(-1)
 
-def prefix(p: str) -> Callable[[str], str]:
-	def inner(x: str) -> str:
-		return p + x
-	return inner
-
-def map(f: MonoCallable) -> Callable[[Iterable], Iterable]:
-	def inner(xs: Iterable) -> Iterable:
-		for x in xs: yield f(x)
-	return inner
-
-def filter(f: Callable[[Any], bool]) -> Callable[[Iterable], Iterable]:
-	def inner(xs: Iterable) -> Iterable:
-		for x in xs:
-			if f(x): yield x
-	return inner
-
-def each(f: MonoCallable) -> Callable[[Iterable], None]:
-	def inner(xs: Iterable) -> None:
-		for x in xs:
-			f(x)
-	return inner
-
-def group(n: int) -> Callable[[Iterable], Iterable[tuple]]:
+def group(n: int, xs: Iterable[Any]) -> Iterable[List[Any]]:
 	margin: int = n//5
-	def inner(xs: Iterable) -> Iterable[tuple]:
-		g = []
-		for x in xs:
-			g.append(x)
-			if len(g) >= n + margin:
-				yield tuple(g[:n])
-				g = g[n:]
-		if len(g) > 0: yield tuple(g)
-	return inner
+	g: List = []
+	for x in xs:
+		g.append(x)
+		if len(g) >= n + margin:
+			yield g[:n]
+			g = g[n:]
+	if len(g) > 0: yield g[:]
 
 def write(x: Tuple[str, str]) -> None:
-	if not last(x): return
+	if not x[1]: return
 	with open('render/'+first(x), 'w') as p:
-		print('Making \033[1m\033[92m%s\033[0m' % (first(x),))
-		p.write(last(x))
+		print('Making \033[1m\033[92m%s\033[0m' % (x[0],))
+		p.write(x[1])
 
 def niceName(s: str) -> Callable[[int], str]:
 	def inner(x: int) -> str: return s % ('' if x == 0 else (x+1)*ITEMS,)
 	return inner
 
-def sort(f: MonoCallable) -> Callable[[Iterable], list]:
-	def inner(x: Iterable) -> list:
-		return sorted(x, key=f)
-	return inner
-
 def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[str, str]:
-	name: str = first(first(items))
-	posts = last(first(items))
-	prev = first(second(items)) if second(items) else None
-	next = first(second(items)) if last(items) else None
+	name: str =  items[0][0]
+	posts: List[Item] = items[0][1]
+	prev: Union[str, None] = items[1][0] if items[1] else None
+	next: Union[str, None] = items[2][0] if items[2] else None
 	tree: Elem = ('html', (('lang', 'en-gb'),), (
 		('head', None, (
 			('meta', (('charset', 'utf-8'),), None),
@@ -144,22 +93,20 @@ def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[st
 							('alt', 'emoji'),
 							('src', '/pics/feed-icon.svg')),
 							None),)),)),
-				('nav', None, P(
-					CONF['links'],
-					map(lambda x: ('a', (('href', CONF['links'][x]),), (x,))))),
+				('nav', None, map(lambda x: ('a', [('href', CONF['links'][x])], [x]), CONF['links'])),
 			)),
 			('section', (('id', 'about'),), (CONF['about'],)),
 			navhead(prev, next),
-			('main', None, P(posts, reversed, map(render_item))),
+			('main', None, map(render_item, reversed(posts))),
 		)),
 	))
 	return (name, '<!DOCTYPE html>'+serialise(tree))
 
 def render_item(item: Item) -> Elem:
-	return ('article', (('id', first(item)),), (
-		('span', (('class', 'data'),), (ymd(first(item)),)),
-		last(item),
-	))
+	return ('article', [('id', guid(item[0]))], [
+		('span', (('class', 'data'),), (ymd(item[0]),)),
+		item[2],
+	])
 
 def render_rss(x: Page) -> Tuple[str, str]:
 	tree: Elem = ('rss', (
@@ -174,10 +121,10 @@ def render_rss(x: Page) -> Tuple[str, str]:
 					('type', 'application/rss+xml')),
 					None),
 				('description', None, (CONF['title'],)),
-				('pubDate', None, (rfctime(first(last(last(x))))),),
+				('pubDate', None, [rfctime(x[1][-1][0])]),
 				('language', None, ('en-gb',)),
 				('ttl', None, ('1440',)),
-				*P(x, last, reversed, map(render_item_rss)),
+				*map(render_item_rss, reversed(x[1]))
 			)),
 		))
 	return (first(x), '<?xml version="1.0" encoding="UTF-8" ?>'+serialise(tree))
@@ -188,7 +135,7 @@ def render_item_rss(item: Item) -> Elem:
 		('title', None, ('New post on %s (%s)' % (CONF['sitename'], g),)),
 		('guid', (('isPermalink', 'false')), ('post/%s' % (g,),)),
 		('pubDate', None, (rfctime(first(item)),)),
-		('description', None, (escape(absolute_links(last(item))),)),
+		('description', None, [escape(absolute_links(item[2]))]),
 		('link', None, ('https://%s.neocities.org/#%s' % (CONF['sitename'], g),)),
 	))
 
@@ -220,24 +167,25 @@ def absolute_links(x: str) -> str:
 			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
 	return x
 
-def item_stream(fp) -> Iterable[str]:
+def item_stream(fp: TextIO) -> Iterable[str]:
 	return fp.read(-1).strip().split('\n\n')
 
 def younger(x: Page) -> bool:
 	if FORCE: return True
-	own = P(x, first, prefix('render/'), lambda x: os.path.getmtime(x) if os.path.isfile(x) else -1)
-	others = P(x, last, map(first), max)
+	path: str = 'render/' + first(x)
+	own: float = os.path.getmtime(path) if os.path.isfile(path) else -1
+	others: int = max(map(first, x[2]))
 	return own < others
 
 def serialise(x: Union[Elem, str]) -> str:
 	if isinstance(x, str): return x
-	xs = ['<', first(x)]
+	xs: List[str] = ['<', first(x)]
 	if second(x) is not None:
-		xs.extend(map(lambda x: ' %s="%s"' % (first(x), second(x)))(second(x)))
-	if last(x):
+		xs.extend(' %s="%s"' % (first(x), second(x)) for x in second(x))
+	if x[2]:
 		xs.append('>')
-		xs.extend((serialise(x) for x in last(x)))
-		xs.extend(('</', first(x), '>'))
+		xs.extend(serialise(x) for x in x[2])
+		xs.extend(['</', first(x), '>'])
 	else:
 		xs.append('/>')
 	return emptyjoin(xs)
@@ -269,10 +217,10 @@ def rfctime(x: int) -> str:
 def emptyjoin(x: Iterable[Any]) -> str:
 	return ''.join(x)
 
-def read(x: str) -> object:
+def read(x: str) -> TextIO:
 	return open(x, 'r')
 
-def mapFirst(f: Callable) -> Callable:
-	return map(lambda x: (f(first(x)), second(x)))
+def mapFirst(f: Callable, xs: Iterable[Tuple[Any, Any]]) -> Iterable[Tuple[Any, Any]]:
+	return map(lambda x: (f(x[0], x[1])), xs)
 
 if __name__ == '__main__': main('posts', sys.argv[1:])
