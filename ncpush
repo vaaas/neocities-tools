@@ -4,6 +4,7 @@ from getpass import getpass
 from typing import Set, List, Any, Iterable, Tuple
 
 CONF = json.loads(open('config').read())
+FileSize = Tuple[str, int]
 
 def main(args: List[str]):
 	if len(args) >= 2:
@@ -16,8 +17,8 @@ def main(args: List[str]):
 	user: str = CONF['sitename']
 	print('Sitename is', user)
 	password: str = getpass('Password: ')
-	remote: List[Tuple[str, int]] = remote_files(user, password)
-	local: List[Tuple[str, int]] = [ (os.path.relpath(x, '.'), size(x)) for x in walk_files('.') ]
+	remote: List[FileSize] = remote_files(user, password)
+	local: List[FileSize] = [ (os.path.relpath(x, '.'), size(x)) for x in walk_files('.') ]
 	remove: Set[str] = heads(remote).difference(heads(local))
 	add: Set[str] = heads(set(local).difference(set(remote)))
 
@@ -35,7 +36,7 @@ def main(args: List[str]):
 			print('Done')
 	else: print('Nothing to upload')
 
-def remote_files(user: str, password: str) -> List[Tuple[str, int]]:
+def remote_files(user: str, password: str) -> List[FileSize]:
 	args: List[str] = ['/usr/bin/curl', 'https://%s:%s@neocities.org/api/list' % (user, password)]
 	x: dict = json.loads(output(args))
 	if x['result'] != 'success': raise Exception('Getting remote files failed')
@@ -65,8 +66,8 @@ def walk_files(x: str) -> Iterable[str]:
 def run(x: List[str]): subprocess.call(x, stdout=sys.stdout, stderr=sys.stderr)
 def output(x: List[str]) -> str: return subprocess.check_output(x, universal_newlines=True)
 def size(x: str) -> int: return os.stat(x).st_size
-def head(x: List) -> Any: return x[0]
-def heads(x: Iterable) -> set: return set(map(head, x))
+def head(x: FileSize) -> Any: return x[0]
+def heads(x: Iterable[FileSize]) -> set: return set(map(head, x))
 def yes_p(x: str) -> bool: return x.strip().lower() in ('y', 'ye', 'yes', 'yeah', 'yup', 'ok', 'okay')
 def commajoin(x: Iterable) -> str: return ', '.join(x)
 

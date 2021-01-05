@@ -48,9 +48,6 @@ def write(x: Tuple[str, str]) -> None:
 		print('Making \033[1m\033[92m%s\033[0m' % (x[0],))
 		p.write(x[1])
 
-def niceName(s: str, x: int) -> str:
-	return s % ('' if x == 0 else (x+1)*ITEMS,)
-
 def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[str, str]:
 	name: str =  items[0][0]
 	posts: List[Item] = items[0][1]
@@ -94,8 +91,8 @@ def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[st
 	return (name, '<!DOCTYPE html>'+serialise(tree))
 
 def render_item(item: Item) -> Elem:
-	return ('article', [('id', guid(item[0]))], [
-		('span', (('class', 'data'),), (ymd(item[0]),)),
+	return ('article', [ ('id', guid(item[0])) ], [
+		('span', [('class', 'data')], [ ymd(item[0]) ]),
 		item[2],
 	])
 
@@ -130,7 +127,7 @@ def render_item_rss(item: Item) -> Elem:
 		('link', None, [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
 	])
 
-def navhead(p=None, n=None, up=False) -> Union[Elem, str]:
+def navhead(p: Optional[str] = None, n: Optional[str] = None, up: bool = False) -> Union[Elem, str]:
 	children: List[Elem] = []
 	if p: children.append(('a', [('href', p)], ['← Previous']))
 	if up: children.append(('a', [('href', '../')],  ['↑ Up']))
@@ -145,7 +142,7 @@ def escape(x: str) -> str:
 
 def int_to_base(x: int, base: int) -> str:
 	if x == 0: return DIGITS[0]
-	xs = []
+	xs: List[str] = []
 	while x:
 		x, mod = divmod(x, base)
 		xs.append(DIGITS[mod])
@@ -157,9 +154,6 @@ def absolute_links(x: str) -> str:
 			'%s="/' % (i,),
 			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
 	return x
-
-def item_stream(fp: TextIO) -> Iterable[str]:
-	return fp.read(-1).strip().split('\n\n')
 
 def younger(x: Page) -> bool:
 	if FORCE: return True
@@ -184,7 +178,7 @@ def serialise(x: Union[str, Elem]) -> str:
 	return emptyjoin(xs)
 
 def parse(x: str) -> Item:
-	p = x.strip().split('\n', 2)
+	p: List[str] = x.strip().split('\n', 2)
 	return (int(p[0]), p[1], p[2])
 
 def double_link(xs: Iterable) -> Iterable[Tuple[Any, Optional[Any], Optional[Any]]]:
@@ -198,19 +192,12 @@ def double_link(xs: Iterable) -> Iterable[Tuple[Any, Optional[Any], Optional[Any
 		if b is not None: yield (b, a, c)
 	yield (c, b, None)
 
-def guid(x: int) -> str:
-	return int_to_base(x, 62)
-
-def ymd(x: int) -> str:
-	return time.strftime('%Y-%m-%d', time.gmtime(x))
-
-def rfctime(x: int) -> str:
-	return time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(x))
-
-def emptyjoin(x: Iterable) -> str:
-	return ''.join(x)
-
-def read(x: str) -> TextIO:
-	return open(x, 'r')
+def niceName(s: str, x: int) -> str: return s % ('' if x == 0 else (x+1)*ITEMS,)
+def item_stream(fp: TextIO) -> Iterable[str]: return fp.read(-1).strip().split('\n\n')
+def guid(x: int) -> str: return int_to_base(x, 62)
+def ymd(x: int) -> str: return time.strftime('%Y-%m-%d', time.gmtime(x))
+def rfctime(x: int) -> str: return time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(x))
+def emptyjoin(x: Iterable) -> str: return ''.join(x)
+def read(x: str) -> TextIO: return open(x, 'r')
 
 if __name__ == '__main__': main('posts', sys.argv[1:])
