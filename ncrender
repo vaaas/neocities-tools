@@ -6,7 +6,7 @@ CONF = json.loads(open('config').read())
 ITEMS: int = CONF['items']
 DIGITS: str = string.digits + string.ascii_letters + '-_'
 FORCE: bool = False
-CATS: Set[str] = set()
+CATS: List[str] = []
 
 #types
 Item = Tuple[int, str, str]
@@ -18,7 +18,7 @@ def main(pathname: str, args: list) -> None:
 	global FORCE, CATS
 	FORCE = len(args) > 0 and args[0] == '-f'
 	posts: List[Item] = list(parse(x) for x in item_stream(read(pathname)))
-	CATS = set(x[1] for x in posts)
+	CATS = sorted(list(set(x[1] for x in posts)))
 	total: List[List[Item]] = list(group(ITEMS, sorted(posts, key=lambda x: x[0])))
 
 	x: Iterable[Tuple[str, str]] = (
