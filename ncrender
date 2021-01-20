@@ -55,18 +55,7 @@ def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[st
 	posts: List[Item] = items[0][1]
 	prev: Union[str, None] = items[1][0] if isinstance(items[1], tuple) else None
 	next: Union[str, None] = items[2][0] if isinstance(items[2], tuple) else None
-	tree: Elem = ('html', [ ('lang', 'en-gb') ], [
-		('head', None, [
-			('meta', [ ('charset', 'utf-8') ], None),
-			('meta', [ ('name', 'viewport'), ('content', 'width=device-width, initial-scale=1.0') ], None),
-			('meta', [ ('name', 'url'), ('content', 'https://%s.neocities.org' % (CONF['sitename'],)) ], None),
-			('meta', [ ('name', 'author'), ('content', CONF['author']) ], None),
-			('meta', [ ('name', 'description'), ('content', CONF['title']) ], None),
-			('link', [ ('rel', 'stylesheet'), ('href', '/style.css') ], None),
-			('link', [ ('rel', 'icon'), ('href', '/favicon.ico?v=2') ], None),
-			('link', [ ('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml') ], None),
-			('title', None, [ CONF['title'] ]),
-		]),
+	tree: Elem = html('en-gb', head(CONF['title']),
 		('body', None, [
 			('header', None, [
 				imglink(href='/', src='/pics/ruri_thinking_icon.jpg', alt='icon'),
@@ -87,8 +76,7 @@ def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[st
 				navhead(prev, next),
 			]),
 			('script', [('src', '/script.js')], ' '),
-		]),
-	])
+		]))
 	return (name, '<!DOCTYPE html>'+serialise(tree))
 
 def render_item(item: Item) -> Elem:
@@ -139,6 +127,36 @@ def imglink(href: str, src: str, alt: Optional[str]) -> Elem:
 	imgprops: List[Prop] = [ ('src', src) ]
 	if alt is not None: imgprops.append(('alt', alt))
 	return ('a', [('href', href)], [ ('img', imgprops, None) ])
+
+def html(lang: str, head: Elem, body: Elem) -> Elem:
+	return ('html', [('lang', lang)], [head, body])
+
+def head(title: str) -> Elem:
+		return ('head', None, [
+			('meta', [ ('charset', 'utf-8') ], None),
+			('meta', [ ('name', 'viewport'), ('content', 'width=device-width, initial-scale=1.0') ], None),
+			('meta', [ ('name', 'url'), ('content', 'https://%s.neocities.org' % (CONF['sitename'],)) ], None),
+			('meta', [ ('name', 'author'), ('content', CONF['author']) ], None),
+			('meta', [ ('name', 'description'), ('content', CONF['title']) ], None),
+			('link', [ ('rel', 'stylesheet'), ('href', '/style.css') ], None),
+			('link', [ ('rel', 'icon'), ('href', '/favicon.ico?v=2') ], None),
+			('link', [ ('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml') ], None),
+			('title', None, [ CONF['title'] ]),
+		])
+
+def page(x: str) -> Elem:
+	title = 'test'
+	now = int(time.time())
+	body = x
+	return html('en-gb', head(title),
+		('body', None, [
+			('header', None, [
+				('a', None, title),
+				' — ',
+				('span', [('class', 'data')], ymd(now))
+			]),
+			('main', None, body)
+		]))
 
 def escape(x: str) -> str:
 	for i in (('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;')):

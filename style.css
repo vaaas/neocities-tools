@@ -6,10 +6,9 @@ li, blockquote { margin-left: 1em; }
 hr, article+article { border: none; border-top: 1px solid #bbb; }
 code { white-space: pre-wrap; }
 figure, body, img, figcaption { margin: auto; }
-figcaption { margin-top: 0.5em; max-width: 75%; }
+figcaption { margin-top: 0.5em; max-width: 75%; font-style: oblique; }
 blockquote { padding-left: 1em; border-left: 1px solid #bbb; }
-footer, figcaption { font-style: oblique; }
-header, figcaption, footer, nav { text-align: center; }
+header, figcaption, nav { text-align: center; }
 header > p { text-align: initial; }
 article p, ul, h1 { margin: 0; }
 nav { margin: 1em -10px; }
