@@ -1,4 +1,5 @@
 a { text-underline-offset: 0.25em; color: #62A; }
+a.active { color: inherit; font-weight: bold; }
 img { display: block; max-width: 100%; }
 .fullwidth { margin: 0 -10px; max-width: calc(20px + 100%); }
 li, blockquote { margin-left: 1em; }
@@ -8,14 +9,15 @@ figure, body, img, figcaption { margin: auto; }
 figcaption { margin-top: 0.5em; max-width: 75%; }
 blockquote { padding-left: 1em; border-left: 1px solid #bbb; }
 footer, figcaption { font-style: oblique; }
-header, figcaption, footer { text-align: center; }
+header, figcaption, footer, nav { text-align: center; }
 header > p { text-align: initial; }
 article p, ul, h1 { margin: 0; }
-nav { line-height: 2em; margin: 1em 0; }
-nav > a { margin: 0 1em; }
+nav { margin: 1em -10px; }
+nav a { padding: 0.5em }
 .data { color: #999; }
 .slide { white-space: nowrap; overflow: auto; }
 .slide img, h1 img { display: inline; }
+.hide { display: none; }
 body > *+* { padding-top: 2em; }
 article+article { padding-top: 1em; margin-top: 1em; }
 article h1 { font-size: inherit; }

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 import sys, os, time, json, string
-from typing import Iterable, Union, Any, Tuple, List, Optional, TextIO
+from typing import Iterable, Union, Any, Tuple, List, Optional, TextIO, Set
 
 CONF = json.loads(open('config').read())
 ITEMS: int = CONF['items']
-DIGITS: str = string.digits + string.ascii_letters
+DIGITS: str = string.digits + string.ascii_letters + '-_'
 FORCE: bool = False
+CATS: Set[str] = set()
 
 #types
 Item = Tuple[int, str, str]
@@ -14,9 +15,10 @@ Prop = Tuple[str, str]
 Elem = Tuple[str, Optional[Iterable[Prop]], Optional[Iterable[Union[str, 'Elem']]]] # type: ignore
 
 def main(pathname: str, args: list) -> None:
-	global FORCE
+	global FORCE, CATS
 	FORCE = len(args) > 0 and args[0] == '-f'
-	posts: Iterable[Item] = (parse(x) for x in item_stream(read(pathname)))
+	posts: List[Item] = list(parse(x) for x in item_stream(read(pathname)))
+	CATS = set(x[1] for x in posts)
 	total: List[List[Item]] = list(group(ITEMS, sorted(posts, key=lambda x: x[0])))
 
 	x: Iterable[Tuple[str, str]] = (
@@ -73,17 +75,24 @@ def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[st
 					' ',
 					imglink(href='/rss.xml', src='/pics/feed-icon.svg', alt='rss')
 				]),
-				('nav', None, map(lambda x: ('a', [('href', CONF['links'][x])], [x]), CONF['links'])),
+				('nav', [('id', 'links')], map(lambda x: ('a', [('href', CONF['links'][x])], [x]), CONF['links'])),
 				('p', None, [ CONF['about'] ]),
 			]),
-			navhead(prev, next),
-			('main', None, (render_item(x) for x in reversed(posts))),
+			('main', None, [
+				('nav', [('id', 'cats')], [
+					('a', [('href', 'all'), ('class', 'active')], 'all'),
+					*(('a', [('href', x)], x) for x in CATS)
+				]),
+				*(render_item(x) for x in reversed(posts)),
+				navhead(prev, next),
+			]),
+			('script', [('src', '/script.js')], ' '),
 		]),
 	])
 	return (name, '<!DOCTYPE html>'+serialise(tree))
 
 def render_item(item: Item) -> Elem:
-	return ('article', [ ('id', guid(item[0])) ], [
+	return ('article', [ ('id', guid(item[0])), ('t', item[1]) ], [
 		('span', [('class', 'data')], [ ymd(item[0]) ]),
 		item[2],
 	])
@@ -119,13 +128,12 @@ def render_item_rss(item: Item) -> Elem:
 		('link', None, [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
 	])
 
-def navhead(p: Optional[str] = None, n: Optional[str] = None, up: bool = False) -> Union[Elem, str]:
+def navhead(p: Optional[str] = None, n: Optional[str] = None) -> Union[Elem, str]:
 	children: List[Elem] = []
 	if p: children.append(('a', [('href', p)], ['← Previous']))
-	if up: children.append(('a', [('href', '../')],  ['↑ Up']))
 	if n: children.append(('a', [('href', n)], ['Next →']))
 	if len(children) == 0: return ''
-	else: return ('nav', None, children)
+	else: return ('nav', [('id', 'pagination')], children)
 
 def imglink(href: str, src: str, alt: Optional[str]) -> Elem:
 	imgprops: List[Prop] = [ ('src', src) ]
@@ -191,7 +199,7 @@ def double_link(xs: Iterable) -> Iterable[Tuple[Any, Optional[Any], Optional[Any
 
 def niceName(s: str, x: int) -> str: return s % ('' if x == 0 else (x+1)*ITEMS,)
 def item_stream(fp: TextIO) -> Iterable[str]: return fp.read(-1).strip().split('\n\n')
-def guid(x: int) -> str: return int_to_base(x, 62)
+def guid(x: int) -> str: return int_to_base((x-1483228800)//60, len(DIGITS))
 def ymd(x: int) -> str: return time.strftime('%Y-%m-%d', time.gmtime(x))
 def rfctime(x: int) -> str: return time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(x))
 def emptyjoin(x: Iterable) -> str: return ''.join(x)
