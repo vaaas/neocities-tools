@@ -61,7 +61,6 @@ def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[st
 				imglink(href='/', src='/pics/ruri_thinking_icon.jpg', alt='icon'),
 				('h1', None, [
 					CONF['title'],
-					' ',
 					imglink(href='/rss.xml', src='/pics/feed-icon.svg', alt='rss')
 				]),
 				('nav', [('id', 'links')], map(lambda x: ('a', [('href', CONF['links'][x])], [x]), CONF['links'])),
@@ -195,9 +194,9 @@ def serialise(x: Union[str, Elem]) -> str:
 		if len(tmp) != 0:
 			xs.append('>')
 			xs.extend(tmp)
-			xs.extend(['</', x[0], '>'])
+			xs.extend(['</', x[0], '> '])
 	else:
-		xs.append('/>')
+		xs.append('/> ')
 	return emptyjoin(xs)
 
 def parse(x: str) -> Item:
