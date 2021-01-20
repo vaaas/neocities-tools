@@ -74,8 +74,8 @@ def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[st
 					imglink(href='/rss.xml', src='/pics/feed-icon.svg', alt='rss')
 				]),
 				('nav', None, map(lambda x: ('a', [('href', CONF['links'][x])], [x]), CONF['links'])),
+				('p', None, [ CONF['about'] ]),
 			]),
-			('section', [ ('id', 'about') ], [ CONF['about'] ]),
 			navhead(prev, next),
 			('main', None, (render_item(x) for x in reversed(posts))),
 		]),
