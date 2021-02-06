@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-import sys, os, time, json, string
+import sys, os, time, json, string, re
 from typing import Iterable, Union, Any, Tuple, List, Optional, TextIO, Set
+
+os.chdir(os.path.dirname(sys.argv[0]))
 
 CONF = json.loads(open('config').read())
 ITEMS: int = CONF['items']
@@ -15,6 +17,8 @@ Prop = Tuple[str, str]
 Elem = Tuple[str, Optional[Iterable[Prop]], Optional[Iterable[Union[str, 'Elem']]]] # type: ignore
 
 def main(pathname: str, args: list) -> None:
+	if len(args) > 0 and args[0] == '-s': return make_single()
+
 	global FORCE, CATS
 	FORCE = len(args) > 0 and args[0] == '-f'
 	posts: List[Item] = list(parse(x) for x in item_stream(read(pathname)))
@@ -33,6 +37,14 @@ def main(pathname: str, args: list) -> None:
 
 	y: Tuple[str, List[Item]] = ('rss.xml', total[-1])
 	if younger(y): write(render_rss(y))
+
+def make_single():
+	data: str = sys.stdin.read(-1)
+	match = re.search('<h1>(.+?)</h1>', data)
+	if match is None:
+		raise Exception('No title found. Are you sure it has an h1 element?')
+	title: str = match.group(1)
+	print('<!DOCTYPE html>', serialise(page(title, data)))
 
 def group(n: int, xs: Iterable) -> Iterable[List]:
 	margin: int = n//5
@@ -140,17 +152,15 @@ def head(title: str) -> Elem:
 			('link', [ ('rel', 'stylesheet'), ('href', '/style.css') ], None),
 			('link', [ ('rel', 'icon'), ('href', '/favicon.ico?v=2') ], None),
 			('link', [ ('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml') ], None),
-			('title', None, [ CONF['title'] ]),
+			('title', None, [ title ]),
 		])
 
-def page(x: str) -> Elem:
-	title = 'test'
+def page(title: str, body: str) -> Elem:
 	now = int(time.time())
-	body = x
 	return html('en-gb', head(title),
 		('body', None, [
 			('header', None, [
-				('a', None, title),
+				('a', [('href', '/')], 'Home'),
 				' — ',
 				('span', [('class', 'data')], ymd(now))
 			]),
