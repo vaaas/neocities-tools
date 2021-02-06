@@ -5,6 +5,7 @@ img { display: block; max-width: 100%; }
 li, blockquote { margin-left: 1em; }
 hr, article+article { border: none; border-top: 1px solid #bbb; }
 code { white-space: pre-wrap; }
+textarea { width: 100%; height: 50ex; }
 figure, body, img, figcaption { margin: auto; }
 figcaption { margin-top: 0.5em; max-width: 75%; font-style: oblique; }
 blockquote { padding-left: 1em; border-left: 1px solid #bbb; }
