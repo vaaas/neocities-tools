@@ -41,8 +41,7 @@ async function filter_posts(type)
 	{ const main = document.querySelector('main')
 	each(toggle(type))(qss('article'))
 	if (!loaded)
-		{ for await (const x of element_loader())
-			A(x, toggle(type), C(child)(main))
+		{ await each_as(AA(toggle(type), C(child)(main)))(element_loader())
 		loaded = true }
 	maybe(remove_class('active'))(qs('a.active'))
 	maybe(add_class('active'))(qs(`a[href="${type}"]`))
@@ -58,9 +57,10 @@ async function* element_loader()
 				prop('href'),
 				fetch,
 				then(text),
-				then(parse_html),
-				then(tap(x => dom = x)),
-				then(qssc('article')))),
+				then(AA(
+					parse_html,
+					tap(x => dom = x),
+					qssc('article'))))),
 			otherwise(() => { dom = null ; return Promise.resolve([]) })) }
 
 window.onload = function()
