@@ -101,17 +101,17 @@ def render_rss(x: Page) -> Tuple[str, str]:
 		('version', '2.0'),
 		('xmlns:atom', 'http://www.w3.org/2005/Atom')), (
 			('channel', None, (
-				('title', None, (CONF['title'],)),
-				('links', None, ('https://%s.neocities.org' % (CONF['sitename'],),)),
+				('title', None, [CONF['title']]),
+				('link', None, ['https://%s.neocities.org' % (CONF['sitename'],)]),
 				('atom:link', (
 					('href', 'https://%s.neocities.org/rss.xml' % (CONF['sitename'],)),
 					('rel', 'self'),
 					('type', 'application/rss+xml')),
 					None),
-				('description', None, (CONF['title'],)),
+				('description', None, [CONF['title']]),
 				('pubDate', None, [rfctime(x[1][-1][0])]),
-				('language', None, ('en-gb',)),
-				('ttl', None, ('1440',)),
+				('language', None, ['en-gb']),
+				('ttl', None, ['1440']),
 				*map(render_item_rss, reversed(x[1]))
 			)),
 		))
@@ -121,7 +121,7 @@ def render_item_rss(item: Item) -> Elem:
 	g: str = guid(item[0])
 	return ('item', None, [
 		('title', None, [ 'New post on %s (%s)' % (CONF['sitename'], g) ]),
-		('guid', [ ('isPermalink', 'false') ], [ 'post/%s' % (g,) ]),
+		('guid', [ ('isPermaLink', 'false') ], [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
 		('pubDate', None, [ rfctime(item[0]) ]),
 		('description', None, [ escape(absolute_links(item[2])) ]),
 		('link', None, [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
