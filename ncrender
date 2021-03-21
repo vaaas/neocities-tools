@@ -1,42 +1,29 @@
 #!/usr/bin/env python3
 import sys, os, time, json, string, re
-from typing import Iterable, Union, Any, Tuple, List, Optional, TextIO, Set
+from typing import Iterable, Union, Tuple, List, Optional, TextIO
 
 os.chdir(os.path.dirname(sys.argv[0]))
 
 CONF = json.loads(open('config').read())
-ITEMS: int = CONF['items']
 DIGITS: str = string.digits + string.ascii_letters + '-_'
-FORCE: bool = False
 CATS: List[str] = []
 
 #types
 Item = Tuple[int, str, str]
-Page = Tuple[str, List[Item]]
 Prop = Tuple[str, str]
 Elem = Tuple[str, Optional[Iterable[Prop]], Optional[Iterable[Union[str, 'Elem']]]] # type: ignore
 
 def main(pathname: str, args: list) -> None:
 	if len(args) > 0 and args[0] == '-s': return make_single()
 
-	global FORCE, CATS
-	FORCE = len(args) > 0 and args[0] == '-f'
-	posts: List[Item] = list(parse(x) for x in item_stream(read(pathname)))
+	global CATS
+	posts: List[Item] = list(reversed(sorted(map(parse, item_stream(read(pathname))), key=first)))
 	CATS = sorted(list(set(x[1] for x in posts)))
-	total: List[List[Item]] = list(group(ITEMS, sorted(posts, key=lambda x: x[0])))
 
-	x: Iterable[Tuple[str, str]] = (
-		map(render_index,
-		filter(lambda x: younger(x[0]),
-		double_link
-		(map(lambda x: (niceName('index%s.html', x[0]), x[1]),
-		enumerate
-		(reversed
-		(total)))))))
-	for i in x: write(i)
+	write('index.html', render_index(posts))
+	write('rss.xml', render_rss(posts[:20]))
 
-	y: Tuple[str, List[Item]] = ('rss.xml', total[-1])
-	if younger(y): write(render_rss(y))
+def first(x): return x[0]
 
 def make_single():
 	data: str = sys.stdin.read(-1)
@@ -46,27 +33,13 @@ def make_single():
 	title: str = match.group(1)
 	print('<!DOCTYPE html>', serialise(page(title, data)))
 
-def group(n: int, xs: Iterable) -> Iterable[List]:
-	margin: int = n//5
-	g: List = []
-	for x in xs:
-		g.append(x)
-		if len(g) >= n + margin:
-			yield g[:n]
-			g = g[n:]
-	if len(g) > 0: yield g[:]
-
-def write(x: Tuple[str, str]) -> None:
+def write(f: str, x: str) -> None:
 	if not x[1]: return
-	with open('render/'+x[0], 'w') as p:
-		print('Making \033[1m\033[92m%s\033[0m' % (x[0],))
-		p.write(x[1])
+	with open('render/'+f, 'w') as p:
+		print('Making \033[1m\033[92m%s\033[0m' % (f,))
+		p.write(f)
 
-def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[str, str]:
-	name: str =  items[0][0]
-	posts: List[Item] = items[0][1]
-	prev: Union[str, None] = items[1][0] if isinstance(items[1], tuple) else None
-	next: Union[str, None] = items[2][0] if isinstance(items[2], tuple) else None
+def render_index(posts: Iterable[Item]) -> str:
 	tree: Elem = html('en-gb', head(CONF['title']),
 		('body', None, [
 			('header', None, [
@@ -83,12 +56,11 @@ def render_index(items: Tuple[Page, Optional[Page], Optional[Page]]) -> Tuple[st
 					('a', [('href', 'all'), ('class', 'active')], 'all'),
 					*(('a', [('href', x)], x) for x in CATS)
 				]),
-				*(render_item(x) for x in reversed(posts)),
-				navhead(prev, next),
+				*(render_item(x) for x in posts),
 			]),
 			('script', [('src', '/script.js')], ' '),
 		]))
-	return (name, '<!DOCTYPE html>'+serialise(tree))
+	return '<!DOCTYPE html>'+serialise(tree)
 
 def render_item(item: Item) -> Elem:
 	return ('article', [ ('id', guid(item[0])), ('t', item[1]) ], [
@@ -96,7 +68,7 @@ def render_item(item: Item) -> Elem:
 		item[2],
 	])
 
-def render_rss(x: Page) -> Tuple[str, str]:
+def render_rss(xs: List[Item]) -> str:
 	tree: Elem = ('rss', (
 		('version', '2.0'),
 		('xmlns:atom', 'http://www.w3.org/2005/Atom')), (
@@ -109,13 +81,13 @@ def render_rss(x: Page) -> Tuple[str, str]:
 					('type', 'application/rss+xml')),
 					None),
 				('description', None, [CONF['title']]),
-				('pubDate', None, [rfctime(x[1][-1][0])]),
+				('pubDate', None, [rfctime(xs[0][0])]),
 				('language', None, ['en-gb']),
 				('ttl', None, ['1440']),
-				*map(render_item_rss, reversed(x[1]))
+				*(render_item_rss(x) for x in xs)
 			)),
 		))
-	return (x[0], '<?xml version="1.0" encoding="UTF-8" ?>'+serialise(tree))
+	return '<?xml version="1.0" encoding="UTF-8" ?>'+serialise(tree)
 
 def render_item_rss(item: Item) -> Elem:
 	g: str = guid(item[0])
@@ -127,13 +99,6 @@ def render_item_rss(item: Item) -> Elem:
 		('link', None, [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
 	])
 
-def navhead(p: Optional[str] = None, n: Optional[str] = None) -> Union[Elem, str]:
-	children: List[Elem] = []
-	if p: children.append(('a', [('href', p)], ['← Previous']))
-	if n: children.append(('a', [('href', n)], ['Next →']))
-	if len(children) == 0: return ''
-	else: return ('nav', [('id', 'pagination')], children)
-
 def imglink(href: str, src: str, alt: Optional[str]) -> Elem:
 	imgprops: List[Prop] = [ ('src', src) ]
 	if alt is not None: imgprops.append(('alt', alt))
@@ -143,17 +108,17 @@ def html(lang: str, head: Elem, body: Elem) -> Elem:
 	return ('html', [('lang', lang)], [head, body])
 
 def head(title: str) -> Elem:
-		return ('head', None, [
-			('meta', [ ('charset', 'utf-8') ], None),
-			('meta', [ ('name', 'viewport'), ('content', 'width=device-width, initial-scale=1.0') ], None),
-			('meta', [ ('name', 'url'), ('content', 'https://%s.neocities.org' % (CONF['sitename'],)) ], None),
-			('meta', [ ('name', 'author'), ('content', CONF['author']) ], None),
-			('meta', [ ('name', 'description'), ('content', CONF['title']) ], None),
-			('link', [ ('rel', 'stylesheet'), ('href', '/style.css') ], None),
-			('link', [ ('rel', 'icon'), ('href', '/favicon.ico?v=2') ], None),
-			('link', [ ('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml') ], None),
-			('title', None, [ title ]),
-		])
+	return ('head', None, [
+		('meta', [ ('charset', 'utf-8') ], None),
+		('meta', [ ('name', 'viewport'), ('content', 'width=device-width, initial-scale=1.0') ], None),
+		('meta', [ ('name', 'url'), ('content', 'https://%s.neocities.org' % (CONF['sitename'],)) ], None),
+		('meta', [ ('name', 'author'), ('content', CONF['author']) ], None),
+		('meta', [ ('name', 'description'), ('content', CONF['title']) ], None),
+		('link', [ ('rel', 'stylesheet'), ('href', '/style.css') ], None),
+		('link', [ ('rel', 'icon'), ('href', '/favicon.ico?v=2') ], None),
+		('link', [ ('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml') ], None),
+		('title', None, [ title ]),
+	])
 
 def page(title: str, body: str) -> Elem:
 	now = int(time.time())
@@ -187,13 +152,6 @@ def absolute_links(x: str) -> str:
 			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
 	return x
 
-def younger(x: Page) -> bool:
-	if FORCE: return True
-	path: str = 'render/' + x[0]
-	own: float = os.path.getmtime(path) if os.path.isfile(path) else -1
-	others: int = max(x[0] for x in x[1])
-	return own < others
-
 def serialise(x: Union[str, Elem]) -> str:
 	if isinstance(x, str): return x
 	xs: List[str] = ['\n<', x[0]]
@@ -213,18 +171,6 @@ def parse(x: str) -> Item:
 	p: List[str] = x.strip().split('\n', 2)
 	return (int(p[0]), p[1], p[2])
 
-def double_link(xs: Iterable) -> Iterable[Tuple[Any, Optional[Any], Optional[Any]]]:
-	a = None
-	b = None
-	c = None
-	for x in xs:
-		a = b
-		b = c
-		c = x
-		if b is not None: yield (b, a, c)
-	yield (c, b, None)
-
-def niceName(s: str, x: int) -> str: return s % ('' if x == 0 else (x+1)*ITEMS,)
 def item_stream(fp: TextIO) -> Iterable[str]: return fp.read(-1).strip().split('\n\n')
 def guid(x: int) -> str: return int_to_base((x-1483228800)//60, len(DIGITS))
 def ymd(x: int) -> str: return time.strftime('%Y-%m-%d', time.gmtime(x))
