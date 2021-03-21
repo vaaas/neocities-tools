@@ -21,7 +21,7 @@ def main(pathname: str, args: list) -> None:
 	CATS = sorted(list(set(x[1] for x in posts)))
 
 	write('index.html', render_index(posts))
-	write('rss.xml', render_rss(posts[:20]))
+	write('rss.xml', render_rss(posts))
 
 def first(x): return x[0]
 
@@ -37,7 +37,7 @@ def write(f: str, x: str) -> None:
 	if not x[1]: return
 	with open('render/'+f, 'w') as p:
 		print('Making \033[1m\033[92m%s\033[0m' % (f,))
-		p.write(f)
+		p.write(x)
 
 def render_index(posts: Iterable[Item]) -> str:
 	tree: Elem = html('en-gb', head(CONF['title']),
