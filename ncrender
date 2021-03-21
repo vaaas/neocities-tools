@@ -64,7 +64,7 @@ def render_index(posts: Iterable[Item]) -> str:
 
 def render_item(item: Item) -> Elem:
 	return ('article', [ ('id', guid(item[0])), ('t', item[1]) ], [
-		('span', [('class', 'data')], [ ymd(item[0]) ]),
+		('time', None, [ ymd(item[0]) ]),
 		item[2],
 	])
 
@@ -127,7 +127,7 @@ def page(title: str, body: str) -> Elem:
 			('header', None, [
 				('a', [('href', '/')], 'Home'),
 				' — ',
-				('span', [('class', 'data')], ymd(now))
+				('time', None, ymd(now))
 			]),
 			('main', None, body)
 		]))

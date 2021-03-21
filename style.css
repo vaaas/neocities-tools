@@ -14,14 +14,14 @@ header > p { text-align: initial; }
 article p, ul, h1 { margin: 0; }
 nav { margin: 1em -10px; }
 nav a { padding: 0.5em }
-.data { color: #999; }
+time { color: #999; }
 .slide { white-space: nowrap; overflow: auto; }
 .slide img, h1 img { display: inline; }
 .hide { display: none; }
 body > *+* { padding-top: 2em; }
 article+article { padding-top: 1em; margin-top: 1em; }
 article h1 { font-size: inherit; }
-article .data { font-size: 75%; margin: 0.5em 0 0 1em; float: right; }
+article time { font-size: 75%; margin: 0.5em 0 0 1em; float: right; }
 header h1 img { width: 1em }
 header > a > img { width: 160px; height: 160px; border-radius: 50%; }
 html
@@ -41,7 +41,7 @@ body
 .imgtxt :is(h1, h2, h3)
 	{ font-variant: small-caps;
 	font-size: 150%;
-	color: white;
+	color: #fff;
 	position: absolute;
 	bottom: 0; left: 0; right: 0;
 	padding: 1em 0.5em 0.5em 0.5em;
