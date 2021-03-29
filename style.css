@@ -1,5 +1,6 @@
 a { text-underline-offset: 0.25em; color: #62A; }
 a.active { color: inherit; font-weight: bold; }
+h1 { line-height: 1.5em; }
 img { display: block; max-width: 100%; }
 .fullwidth { margin: 0 -10px; max-width: calc(20px + 100%); }
 li, blockquote { margin-left: 1em; }

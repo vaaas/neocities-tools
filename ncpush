@@ -49,18 +49,20 @@ def remote_files(user: str, password: str) -> List[FileSize]:
 	return [ (x['path'], x['size']) for x in x['files'] if not x['is_directory'] ]
 
 def remove_remote(xs: Iterable[str], user: str, password: str) -> None:
-	run([
-		'/usr/bin/curl',
-		*('-d filenames[]='+x for x in xs),
-		'https://%s:%s@neocities.org/api/delete' % (user, password)
-	])
+	lst = ['/usr/bin/curl']
+	for x in xs:
+		lst.append('-d')
+		lst.append('filenames[]='+x)
+	lst.append('https://%s:%s@neocities.org/api/delete' % (user, password))
+	run(lst)
 
 def upload(xs: Iterable[str], user: str, password: str) -> None:
-	run([
-		'/usr/bin/curl',
-		*('-F %s=@%s' % (x, x) for x in xs),
-		'https://%s:%s@neocities.org/api/upload' % (user, password)
-	])
+	lst = ['/usr/bin/curl']
+	for x in xs:
+		lst.append('-F')
+		lst.append('%s=@%s' % (x, x))
+	lst.append('https://%s:%s@neocities.org/api/upload' % (user, password))
+	run(lst)
 
 def walk_files(x: str) -> Iterable[str]:
 	for root, dirs, files in os.walk(x):
