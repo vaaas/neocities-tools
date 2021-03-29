@@ -53,6 +53,7 @@ def render_index(posts: Iterable[Item]) -> str:
 				imglink(href='/', src='/pics/ruri_thinking_icon.jpg', alt='icon'),
 				('h1', None, [
 					CONF['title'],
+					' ',
 					imglink(href='/rss.xml', src='/pics/feed-icon.svg', alt='rss')
 				]),
 				('nav', [('id', 'links')], intersperse(' ', map(lambda x: ('a', [('href', CONF['links'][x])], [x]), CONF['links']))),
