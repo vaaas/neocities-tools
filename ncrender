@@ -23,13 +23,11 @@ def main(pathname: str, args: list) -> None:
 	write('index.html', render_index(posts))
 	write('rss.xml', render_rss(posts))
 
-def first(x): return x[0]
-
 def intersperse(s, xs: Iterable):
-	f = False
-	for x in xs:
-		if f: yield s
-		else: f = True
+	i = iter(xs)
+	yield i.__next__()
+	for x in i:
+		yield s
 		yield x
 
 def make_single():
@@ -47,7 +45,13 @@ def write(f: str, x: str) -> None:
 		p.write(x)
 
 def render_index(posts: Iterable[Item]) -> str:
-	tree: Elem = html('en-gb', head(CONF['title']),
+	def render_item(item: Item) -> Elem:
+		return ('article', [ ('id', guid(item[0])), ('t', item[1]) ], [
+			('time', None, [ ymd(item[0]) ]),
+			item[2],
+		])
+
+	tree: Elem = html(CONF['lang'], head(CONF['title']),
 		('body', None, [
 			('header', None, [
 				imglink(href='/', src='/pics/ruri_thinking_icon.jpg', alt='icon'),
@@ -70,17 +74,22 @@ def render_index(posts: Iterable[Item]) -> str:
 		]))
 	return '<!DOCTYPE html>'+serialise(tree)
 
-def render_item(item: Item) -> Elem:
-	return ('article', [ ('id', guid(item[0])), ('t', item[1]) ], [
-		('time', None, [ ymd(item[0]) ]),
-		item[2],
-	])
-
 def render_rss(xs: List[Item]) -> str:
-	tree: Elem = ('rss', (
-		('version', '2.0'),
-		('xmlns:atom', 'http://www.w3.org/2005/Atom')), (
-			('channel', None, (
+	def render_item_rss(item: Item) -> Elem:
+		g: str = guid(item[0])
+		return ('item', None, [
+			('title', None, [ 'New post on %s (%s)' % (CONF['sitename'], g) ]),
+			('guid', [ ('isPermaLink', 'false') ], [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
+			('pubDate', None, [ rfctime(item[0]) ]),
+			('description', None, [ escape(absolute_links(item[2])) ]),
+			('link', None, [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
+		])
+
+	tree: Elem = ('rss', [
+			('version', '2.0'),
+			('xmlns:atom', 'http://www.w3.org/2005/Atom')
+		], [
+			('channel', None, [
 				('title', None, [CONF['title']]),
 				('link', None, ['https://%s.neocities.org' % (CONF['sitename'],)]),
 				('atom:link', (
@@ -90,22 +99,12 @@ def render_rss(xs: List[Item]) -> str:
 					None),
 				('description', None, [CONF['title']]),
 				('pubDate', None, [rfctime(xs[0][0])]),
-				('language', None, ['en-gb']),
+				('language', None, [CONF['lang']]),
 				('ttl', None, ['1440']),
 				*(render_item_rss(x) for x in xs)
-			)),
-		))
+			]),
+		])
 	return '<?xml version="1.0" encoding="UTF-8"?>'+serialise(tree)
-
-def render_item_rss(item: Item) -> Elem:
-	g: str = guid(item[0])
-	return ('item', None, [
-		('title', None, [ 'New post on %s (%s)' % (CONF['sitename'], g) ]),
-		('guid', [ ('isPermaLink', 'false') ], [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
-		('pubDate', None, [ rfctime(item[0]) ]),
-		('description', None, [ escape(absolute_links(item[2])) ]),
-		('link', None, [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
-	])
 
 def imglink(href: str, src: str, alt: Optional[str]) -> Elem:
 	imgprops: List[Prop] = [ ('src', src) ]
@@ -130,7 +129,7 @@ def head(title: str) -> Elem:
 
 def page(title: str, body: str) -> Elem:
 	now = int(time.time())
-	return html('en-gb', head(title),
+	return html(CONF['lang'], head(title),
 		('body', None, [
 			('header', None, [
 				('a', [('href', '/')], 'Home'),
@@ -185,5 +184,6 @@ def ymd(x: int) -> str: return time.strftime('%Y-%m-%d', time.gmtime(x))
 def rfctime(x: int) -> str: return time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(x))
 def emptyjoin(x: Iterable) -> str: return ''.join(x)
 def read(x: str) -> TextIO: return open(x, 'r')
+def first(x): return x[0]
 
 if __name__ == '__main__': main('posts', sys.argv[1:])
