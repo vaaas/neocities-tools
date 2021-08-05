@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+
+import sys, os, time, json, string, re
+from typing import Iterable, Union, Tuple, List, Optional, TextIO
+import xml.dom.minidom as xml
+
+DIGITS: str = string.digits + string.ascii_letters + '-_'
+def int_to_base(x: int, base: int) -> str:
+	if x == 0: return DIGITS[0]
+	xs: List[str] = []
+	while x:
+		x, mod = divmod(x, base)
+		xs.append(DIGITS[mod])
+	return emptyjoin(reversed(xs))
+
+def guid(x: int) -> str: return int_to_base((x-1483228800)//60, len(DIGITS))
+def element_node(x): return x.nodeType == xml.Node.ELEMENT_NODE
+def text_node(x): return x.nodeType == xml.Node.TEXT_NODE
+def tag_name(a): return lambda b: element_node(b) and b.tagName == a
+def first(x): return x[0]
+def tail(x): return x[1:]
+def clone(x): return x.cloneNode(deep=True)
+
+def find(f, xs):
+	for x in xs:
+		if f(x): return x
+	return None
+
+def query_xml(doc, *fs):
+	x = doc
+	for f in fs:
+		if x == None: return x
+		x = find(f, d.childNodes)
+	return x
+
+def query_xml_all(x, *fs):
+	if len(fs) == 0:
+		yield x
+	else:
+		for c in filter(first(fs), x.childNodes):
+			yield from query_xml_all(c, *tail(fs))
+
+document = xml.parse('site.xml')
+posts = list(
+	map(clone,
+	query_xml_all(document,
+	tag_name('site'), tag_name('posts'), tag_name('post'))))
+
+for x in posts: print(x.toxml())
