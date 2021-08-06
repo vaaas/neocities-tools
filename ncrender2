@@ -15,6 +15,7 @@ def int_to_base(x: int, base: int) -> str:
 		xs.append(DIGITS[mod])
 	return ''.join(reversed(xs))
 
+def ymd(x: int) -> str: return time.strftime('%Y-%m-%d', time.gmtime(x))
 def guid(x: int) -> str: return int_to_base((x-1483228800)//60, len(DIGITS))
 def element_node(x: xml.Node) -> bool: return x.nodeType == xml.Node.ELEMENT_NODE
 def text_node(x: xml.Node) -> bool: return x.nodeType == xml.Node.TEXT_NODE
@@ -22,6 +23,23 @@ def tag_name(a: str) -> Callable[[xml.Node], bool]: return lambda b: element_nod
 def first(x: Sequence[T]) -> T: return x[0]
 def tail(x: Sequence[T]) -> Sequence[T]: return x[1:]
 def clone(x: xml.Node) -> xml.Node: return x.cloneNode(deep=True)
+
+def E(name: str, attrs: Optional[Iterable[Tuple[str, str]]], children: Optional[Iterable[Union[xml.Node, str]]]) -> xml.Node:
+	x: xml.Node = Document.createElement(name)
+	if attrs:
+		for name, value in attrs:
+			x.setAttribute(name, value)
+	if children:
+		for child in children:
+			if isinstance(child, xml.Node):
+				x.appendChild(child)
+			else:
+				x.appendChild(Document.createTextNode(child))
+	return x
+
+def empty(x: xml.Node) -> xml.Node:
+	for c in reversed(x.childNodes):
+		x.removeChild(c)
 
 def find(f: Callable[[T], bool], xs: Iterable[T]) -> Optional[T]:
 	for x in xs:
@@ -56,13 +74,21 @@ def render_frontpage(xs: Iterable[xml.Node]) -> xml.Node:
 		if x.hasAttribute('filename'):
 			render_post(x)
 			h1 = query_xml(x, tag_name('h1'))
-			if h1 == None: raise Exception('h1 element not found but post looks like an article')
-			a = Document.createElement('a')
-			for c in h1.childNodes:
-				a.appendChild(c)
-			a.setAttribute('href', '/' + x.getAttribute('filename'))
+			a = E('a', [('href', '/' + x.getAttribute('filename'))], h1.childNodes)
 			h1.appendChild(a)
-			print(x.toxml())
+			p = query_xml(x, tag_name('p'))
+			empty(x)
+			x.appendChild(h1)
+			for c in p.childNodes: x.appendChild(c)
+			x.removeAttribute('filename')
+		timelem = E('time', None, ymd(int(x.getAttribute('timestamp'))))
+		x.insertBefore(timelem, x.childNodes[0])
+		x.tagName = 'article'
+		x.setAttribute('id', guid(int(x.getAttribute('timestamp'))))
+		x.setAttribute('t', x.getAttribute('tag'))
+		x.removeAttribute('timestamp')
+		x.removeAttribute('tag')
+		print(x.toxml())
 
 def render_post(x: xml.Node): pass
 
