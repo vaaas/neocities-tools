@@ -4,7 +4,7 @@ from getpass import getpass
 from typing import Set, List, Any, Iterable, Tuple, Union
 
 CONF = json.loads(open('config').read())
-FileSize = Tuple[str, int]
+FileSum = Tuple[str, str]
 
 def main(args: List[str]) -> int:
 	try:
@@ -18,8 +18,8 @@ def main(args: List[str]) -> int:
 		user: str = CONF['sitename']
 		print('Sitename is', user)
 		password: str = getpass('Password: ')
-		remote: List[FileSize] = remote_files(user, password)
-		local: List[FileSize] = [ (os.path.relpath(x, '.'), sha1(x)) for x in walk_files('.') ]
+		remote: List[FileSum] = remote_files(user, password)
+		local: List[FileSum] = [ (os.path.relpath(x, '.'), sha1(x)) for x in walk_files('.') ]
 		remove: Set[str] = diff(*(map(first, x) for x in [remote, local]))
 		add: Set[str] = set(map(first, diff(local, remote)))
 
@@ -42,7 +42,7 @@ def main(args: List[str]) -> int:
 		print(str(e))
 		return 1
 
-def remote_files(user: str, password: str) -> List[FileSize]:
+def remote_files(user: str, password: str) -> List[FileSum]:
 	args: List[str] = ['/usr/bin/curl', 'https://%s:%s@neocities.org/api/list' % (user, password)]
 	x: dict = json.loads(output(args))
 	if x['result'] != 'success': raise Exception('Getting remote files failed')
