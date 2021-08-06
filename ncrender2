@@ -24,6 +24,29 @@ def first(x: Sequence[T]) -> T: return x[0]
 def tail(x: Sequence[T]) -> Sequence[T]: return x[1:]
 def clone(x: xml.Node) -> xml.Node: return x.cloneNode(deep=True)
 
+def META(name: str, content: str) -> xml.Node:
+	return E('meta', [('name', name), ('content', content)], None)
+
+def LINK(rel: str, href: str, type: Optional[str] = None) -> xml.Node:
+	xs = [('rel', rel), ('href', href)]
+	if type: xs.append(('type', type))
+	return E('link', xs, None)
+
+def HTML(lang: str, head: xml.Node, body: xml.Node) -> xml.Node:
+	return E('html', [('lang', lang)], [head, body])
+
+def HEAD(title: str) -> xml.Node:
+	return E('head', None, [
+		E('meta', [('charset', 'utf8')], None),
+		META('viewport', 'width=device-width, initial-scale=1.0'),
+		META('url', CONF['url']),
+		META('author', CONF['author']),
+		META('description', CONF['sitename']),
+		LINK('stylesheet', '/style.css'),
+		LINK('icon', '/favicon.ico'),
+		E('title', None, [CONF['sitename']]),
+	])
+
 def E(name: str, attrs: Optional[Iterable[Tuple[str, str]]], children: Optional[Iterable[Union[xml.Node, str]]]) -> xml.Node:
 	x: xml.Node = Document.createElement(name)
 	if attrs:
@@ -36,6 +59,11 @@ def E(name: str, attrs: Optional[Iterable[Tuple[str, str]]], children: Optional[
 			else:
 				x.appendChild(Document.createTextNode(child))
 	return x
+
+def aimg(src: str, href: str, alt: Optional[str] = None) -> xml.Node:
+	img_attrs = [('src', src)]
+	if alt: img_attrs.append(('alt', alt))
+	return E('a', [('href', href)], [E('img', img_attrs, None)])
 
 def empty(x: xml.Node) -> xml.Node:
 	for c in reversed(x.childNodes):
@@ -61,6 +89,19 @@ def query_xml_all(x: xml.Node, *fs: Callable[[xml.Node], bool]) -> Generator[xml
 		for c in cs:
 			yield from query_xml_all(c, *tail(fs))
 
+CONF: dict = {
+	'icon': '/pics/ruri_thinking_icon.jpg',
+	'sitename': 'Vas\'s reviews and other stuff',
+	'links': {
+		'https://google.com': 'Google',
+		'https://facebook.com': 'Facebook',
+	},
+	'lang': 'en-gb',
+	'url': 'https://vas.neocities.org',
+	'author': 'Vas',
+	'blurb': E('p', None, ['I LOVE BIG MEEMS AND I CANNOT LIE']),
+}
+
 def main():
 	document: xml.Node = xml.parse('site.xml')
 	posts = list(
@@ -69,7 +110,7 @@ def main():
 	render_frontpage(posts)
 
 def render_frontpage(xs: Iterable[xml.Node]) -> xml.Node:
-	clones: Iterable[xml.node] = map(clone, xs)
+	clones: Iterable[xml.node] = list(map(clone, xs))
 	for x in clones:
 		if x.hasAttribute('filename'):
 			render_post(x)
@@ -88,8 +129,39 @@ def render_frontpage(xs: Iterable[xml.Node]) -> xml.Node:
 		x.setAttribute('t', x.getAttribute('tag'))
 		x.removeAttribute('timestamp')
 		x.removeAttribute('tag')
-		print(x.toxml())
+	write('render/index.html', '<!DOCTYPE html>' + frontpage_template(clones).toxml())
 
 def render_post(x: xml.Node): pass
+
+def frontpage_template(posts: [xml.Node]) -> xml.Node:
+	distinct_tags: List[str] = sorted(set((x.getAttribute('t') for x in posts)))
+	return HTML(CONF['lang'], HEAD(CONF['sitename']),
+		E('body', None, [
+			E('header', None, [
+				aimg(CONF['icon'], '/', 'icon'),
+				E('h1', None, [
+					CONF['sitename'],
+					aimg('/pics/feed-icon.svg', '/rss.xml', 'rss'),
+				]),
+				E('nav', [('id', 'links')], [
+					*(E('a', [('href', x)], [CONF['links'][x]]) for x in CONF['links'])
+				]),
+				CONF['blurb'],
+			]),
+			E('main', None, [
+				E('nav', [('id', 'cats')], [
+					E('a', [('class', 'active'), ('href', 'all')], ['all']),
+					*(E('a', [('href', x)], [x]) for x in distinct_tags)
+				]),
+				*posts
+			]),
+			E('script', [('src', '/script.js')], [''])
+		])
+	)
+
+def write(pathname: str, contents: str):
+	fp = open(pathname, 'w')
+	fp.write(contents)
+	fp.close()
 
 main()
