@@ -3,8 +3,8 @@
 import sys, os, time, json, string, re
 import xml.dom.minidom as xml
 from typing import *
-
 T = TypeVar('T')
+Document: xml.Node = xml.Document()
 
 DIGITS: str = string.digits + string.ascii_letters + '-_'
 def int_to_base(x: int, base: int) -> str:
@@ -39,8 +39,8 @@ def query_xml_all(x: xml.Node, *fs: Callable[[xml.Node], bool]) -> Generator[xml
 	if len(fs) == 0:
 		yield x
 	else:
-		xs: Iterable[xml.Node] = filter(first(fs), x.childNodes)
-		for c in xs:
+		cs: Iterable[xml.Node] = filter(first(fs), x.childNodes)
+		for c in cs:
 			yield from query_xml_all(c, *tail(fs))
 
 def main():
@@ -48,3 +48,22 @@ def main():
 	posts = list(
 		query_xml_all(document,
 		tag_name('site'), tag_name('posts'), tag_name('post')))
+	render_frontpage(posts)
+
+def render_frontpage(xs: Iterable[xml.Node]) -> xml.Node:
+	clones: Iterable[xml.node] = map(clone, xs)
+	for x in clones:
+		if x.hasAttribute('filename'):
+			render_post(x)
+			h1 = query_xml(x, tag_name('h1'))
+			if h1 == None: raise Exception('h1 element not found but post looks like an article')
+			a = Document.createElement('a')
+			for c in h1.childNodes:
+				a.appendChild(c)
+			a.setAttribute('href', '/' + x.getAttribute('filename'))
+			h1.appendChild(a)
+			print(x.toxml())
+
+def render_post(x: xml.Node): pass
+
+main()
