@@ -3,9 +3,9 @@
 import os, time, string
 import xml.dom.minidom as xml
 from typing import *
+
 T = TypeVar('T')
 Document: xml.Node = xml.Document()
-
 CONF: dict = dict()
 
 DIGITS: str = string.digits + string.ascii_letters + '-_'
@@ -81,10 +81,6 @@ def aimg(src: str, href: str, alt: Optional[str] = None) -> xml.Node:
 	if alt: img_attrs.append(('alt', alt))
 	return E('a', [('href', href)], [E('img', img_attrs, None)])
 
-def empty(x: xml.Node) -> xml.Node:
-	for c in reversed(x.childNodes):
-		x.removeChild(c)
-
 def find(f: Callable[[T], bool], xs: Iterable[T]) -> Optional[T]:
 	for x in xs:
 		if f(x): return x
@@ -113,37 +109,20 @@ def main():
 		return '<?xml version="1.0" encoding="UTF-8"?>' + x.toxml()
 
 	global CONF
-	document: xml.Node = xml.parse('site.xml')
-	site = query_xml(document, tag_name('site'))
+	site = query_xml(xml.parse('site.xml'), tag_name('site'))
 	for x in filter(element_node, site.childNodes):
-		if x.tagName == 'icon': CONF['icon'] = inner_text(x)
-		elif x.tagName == 'sitename': CONF['sitename'] = inner_text(x)
-		elif x.tagName == 'links': CONF['links'] = list(map(clone, query_xml_all(x, tag_name('a'))))
-		elif x.tagName == 'lang': CONF['lang'] = inner_text(x)
-		elif x.tagName == 'url': CONF['url'] = inner_text(x)
-		elif x.tagName == 'author': CONF['author'] = inner_text(x)
-		elif x.tagName == 'blurb': CONF['blurb'] = clone(x)
-		elif x.tagName == 'posts': posts = x
+		if x.tagName in ['icon', 'sitename', 'lang', 'url', 'author']: f = inner_text
+		elif x.tagName == 'links': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
+		elif x.tag_name == 'blurb': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
+		elif x.tagName == 'posts':
+			posts = sorted(query_xml_all(x, tag_name('post')), key=lambda x: int(x.getAttribute('timestamp')))
+			continue
+		CONF[x.tagName] = f(x)
 
-	write('render/index.html',
-		html_final(
-		frontpage_template(
-		list(
-		map(render_item,
-		sorted(
-		query_xml_all(posts, tag_name('post')),
-		key=lambda x: int(x.getAttribute('timestamp'))))))))
+	write('render/index.html', html_final(frontpage_template(list(map(render_item, posts)))))
+	write('render/rss.xml', rss_final(rss_template(list(map(render_rss_item, posts)))))
 
-	write('render/rss.xml',
-		rss_final(
-		rss_template(
-		list(
-		map(render_rss_item,
-		sorted(
-		query_xml_all(posts, tag_name('post')),
-		key=lambda x: int(x.getAttribute('timestamp'))))))))
-
-	for x in query_xml_all(posts, tag_name('post')):
+	for x in posts:
 		if query_xml(x, tag_name('h1')) is None: continue
 		write(
 			os.path.join('render', x.getAttribute('filename')),
