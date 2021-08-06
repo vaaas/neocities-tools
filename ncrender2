@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import sys, os, time, json, string, re
-from typing import Iterable, Union, Tuple, List, Optional, TextIO
 import xml.dom.minidom as xml
+from typing import *
+
+T = TypeVar('T')
 
 DIGITS: str = string.digits + string.ascii_letters + '-_'
 def int_to_base(x: int, base: int) -> str:
@@ -11,39 +13,38 @@ def int_to_base(x: int, base: int) -> str:
 	while x:
 		x, mod = divmod(x, base)
 		xs.append(DIGITS[mod])
-	return emptyjoin(reversed(xs))
+	return ''.join(reversed(xs))
 
 def guid(x: int) -> str: return int_to_base((x-1483228800)//60, len(DIGITS))
-def element_node(x): return x.nodeType == xml.Node.ELEMENT_NODE
-def text_node(x): return x.nodeType == xml.Node.TEXT_NODE
-def tag_name(a): return lambda b: element_node(b) and b.tagName == a
-def first(x): return x[0]
-def tail(x): return x[1:]
-def clone(x): return x.cloneNode(deep=True)
+def element_node(x: xml.Node) -> bool: return x.nodeType == xml.Node.ELEMENT_NODE
+def text_node(x: xml.Node) -> bool: return x.nodeType == xml.Node.TEXT_NODE
+def tag_name(a: str) -> Callable[[xml.Node], bool]: return lambda b: element_node(b) and b.tagName == a
+def first(x: Sequence[T]) -> T: return x[0]
+def tail(x: Sequence[T]) -> Sequence[T]: return x[1:]
+def clone(x: xml.Node) -> xml.Node: return x.cloneNode(deep=True)
 
-def find(f, xs):
+def find(f: Callable[[T], bool], xs: Iterable[T]) -> Optional[T]:
 	for x in xs:
 		if f(x): return x
 	return None
 
-def query_xml(doc, *fs):
+def query_xml(doc: xml.Node, *fs: Callable[[xml.Node], bool]) -> Optional[xml.Node]:
 	x = doc
 	for f in fs:
 		if x == None: return x
-		x = find(f, d.childNodes)
+		x = find(f, x.childNodes)
 	return x
 
-def query_xml_all(x, *fs):
+def query_xml_all(x: xml.Node, *fs: Callable[[xml.Node], bool]) -> Generator[xml.Node, None, None]:
 	if len(fs) == 0:
 		yield x
 	else:
-		for c in filter(first(fs), x.childNodes):
+		xs: Iterable[xml.Node] = filter(first(fs), x.childNodes)
+		for c in xs:
 			yield from query_xml_all(c, *tail(fs))
 
-document = xml.parse('site.xml')
-posts = list(
-	map(clone,
-	query_xml_all(document,
-	tag_name('site'), tag_name('posts'), tag_name('post'))))
-
-for x in posts: print(x.toxml())
+def main():
+	document: xml.Node = xml.parse('site.xml')
+	posts = list(
+		query_xml_all(document,
+		tag_name('site'), tag_name('posts'), tag_name('post')))
