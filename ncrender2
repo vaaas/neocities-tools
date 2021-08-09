@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import os, time, string
+import sys, os, time, string
 import xml.dom.minidom as xml
 from typing import *
 
@@ -102,11 +102,18 @@ def query_xml_all(x: xml.Node, *fs: Callable[[xml.Node], bool]) -> Generator[xml
 			yield from query_xml_all(c, *tail(fs))
 
 def main():
-	def html_final(x: xml.Node) -> str:
-		return '<!DOCTYPE html>' + x.toxml()
+	if sys.stdin.isatty(): render_posts()
+	else: create_post()
 
-	def rss_final(x: xml.Node) -> str:
-		return '<?xml version="1.0" encoding="UTF-8"?>' + x.toxml()
+def create_post():
+	doc = xml.parse('site.xml')
+	posts = query_xml(doc, tag_name('site'), tag_name('posts'))
+	posts.appendChild(xml.parseString(sys.stdin.read()))
+	write('site.xml', doc.toxml())
+
+def render_posts():
+	def html_final(x: xml.Node) -> str: return '<!DOCTYPE html>' + x.toxml()
+	def rss_final(x: xml.Node) -> str: return '<?xml version="1.0" encoding="UTF-8"?>' + x.toxml()
 
 	global CONF
 	site = query_xml(xml.parse('site.xml'), tag_name('site'))
