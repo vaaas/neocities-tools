@@ -108,7 +108,7 @@ def main():
 def create_post():
 	doc = xml.parse('site.xml')
 	posts = query_xml(doc, tag_name('site'), tag_name('posts'))
-	posts.appendChild(xml.parseString(sys.stdin.read()))
+	posts.appendChild(query_xml(xml.parseString(sys.stdin.read()), tag_name('post')))
 	write('site.xml', doc.toxml())
 
 def render_posts():
