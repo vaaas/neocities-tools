@@ -2,7 +2,7 @@
 
 import sys, os, time, string
 import xml.dom.minidom as xml
-from typing import *
+from typing import TypeVar, List, Sequence, Callable, Any, Optional, Iterable, Tuple, Union
 
 T = TypeVar('T')
 Document: xml.Node = xml.Document()
@@ -22,11 +22,12 @@ def rfctime(x: int) -> str: return time.strftime('%a, %d %b %Y %H:%M:%S +0000', 
 def guid(x: int) -> str: return int_to_base((x-1483228800)//60, len(DIGITS))
 def element_node(x: xml.Node) -> bool: return x.nodeType == xml.Node.ELEMENT_NODE
 def text_node(x: xml.Node) -> bool: return x.nodeType == xml.Node.TEXT_NODE
-def tag_name(a: str) -> Callable[[xml.Node], bool]: return lambda b: element_node(b) and b.tagName == a
 def first(x: Sequence[T]) -> T: return x[0]
 def tail(x: Sequence[T]) -> Sequence[T]: return x[1:]
 def clone(x: xml.Node) -> xml.Node: return x.cloneNode(deep=True)
 def K(a: T) -> Callable[[Any], T]: return lambda b: a
+def tag_name(a: str) -> Callable[[xml.Node], bool]:
+	return lambda b: element_node(b) and b.tagName == a
 
 def inner_text(x: xml.Node) -> str:
 	text = []
@@ -37,16 +38,7 @@ def inner_text(x: xml.Node) -> str:
 	return ''.join(text)
 
 def maybe(x: Optional[T], good: Callable[[T], Any], bad: Callable[[None], Any]) -> Any:
-	if x is None: return bad(x)
-	else: return good(x)
-
-def META(name: str, content: str) -> xml.Node:
-	return E('meta', [('name', name), ('content', content)], None)
-
-def LINK(rel: str, href: str, type: Optional[str] = None) -> xml.Node:
-	xs = [('rel', rel), ('href', href)]
-	if type: xs.append(('type', type))
-	return E('link', xs, None)
+	return bad(x) if x is None else good(x)
 
 def HTML(lang: str, head: xml.Node, body: xml.Node) -> xml.Node:
 	return E('html', [('lang', lang)], [head, body])
@@ -54,29 +46,31 @@ def HTML(lang: str, head: xml.Node, body: xml.Node) -> xml.Node:
 def HEAD(title: str) -> xml.Node:
 	return E('head', None, [
 		E('meta', [('charset', 'utf8')], None),
-		META('viewport', 'width=device-width, initial-scale=1.0'),
-		META('url', CONF['url']),
-		META('author', CONF['author']),
-		META('description', CONF['sitename']),
-		LINK('stylesheet', '/style.css'),
-		LINK('icon', '/favicon.ico'),
+		E('meta', [('name', 'viewport'), ('value', 'width=device-width, initial-scale=1.0')], None),
+		E('meta', [('name', 'url'), ('value', CONF['url'])], None),
+		E('meta', [('name', 'author'), ('value', CONF['author'])], None),
+		E('meta', [('name', 'description'), ('value', CONF['sitename'])], None),
+		E('link', [('rel', 'stylesheet'), ('href', '/style.css')], None),
+		E('link', [('rel', 'icon'), ('href', '/favicon.ico')], None),
+		E('link', [('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml')], None),
 		E('title', None, [title]),
 	])
 
-def E(name: str, attrs: Optional[Iterable[Tuple[str, str]]], children: Optional[Iterable[Union[xml.Node, str]]]) -> xml.Node:
+def E(
+	name: str,
+	attrs: Optional[Iterable[Tuple[str, str]]],
+	children: Optional[Iterable[Union[xml.Node, str]]]
+) -> xml.Node:
 	x: xml.Node = Document.createElement(name)
 	if attrs:
-		for key, value in attrs:
-			x.setAttribute(key, value)
+		for key, value in attrs: x.setAttribute(key, value)
 	if children:
 		for child in children:
-			if isinstance(child, xml.Node):
-				x.appendChild(child)
-			elif isinstance(child, str):
-				x.appendChild(Document.createTextNode(child))
+			if isinstance(child, xml.Node): x.appendChild(child)
+			elif isinstance(child, str): x.appendChild(Document.createTextNode(child))
 	return x
 
-def aimg(src: str, href: str, alt: Optional[str] = None) -> xml.Node:
+def AIMG(src: str, href: str, alt: Optional[str] = None) -> xml.Node:
 	img_attrs = [('src', src)]
 	if alt: img_attrs.append(('alt', alt))
 	return E('a', [('href', href)], [E('img', img_attrs, None)])
@@ -93,7 +87,7 @@ def query_xml(doc: xml.Node, *fs: Callable[[xml.Node], bool]) -> Optional[xml.No
 		x = find(f, x.childNodes)
 	return x
 
-def query_xml_all(x: xml.Node, *fs: Callable[[xml.Node], bool]) -> Generator[xml.Node, None, None]:
+def query_xml_all(x: xml.Node, *fs: Callable[[xml.Node], bool]) -> Iterable[xml.Node]:
 	if len(fs) == 0:
 		yield x
 	else:
@@ -122,7 +116,9 @@ def render_posts():
 		elif x.tagName == 'links': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
 		elif x.tag_name == 'blurb': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
 		elif x.tagName == 'posts':
-			posts = sorted(query_xml_all(x, tag_name('post')), key=lambda x: int(x.getAttribute('timestamp')))
+			posts = sorted(
+				query_xml_all(x, tag_name('post')),
+				key=lambda x: int(x.getAttribute('timestamp')))
 			continue
 		CONF[x.tagName] = f(x)
 
@@ -156,11 +152,18 @@ def render_item(x: xml.Node) -> xml.Node:
 	], description(x))
 
 def description(x: xml.Node) -> Iterable[xml.Node]:
+	h1 = query_xml(x, tag_name('h1'))
+	if h1 is None: raise Exception('no h1 found')
+	p = query_xml(x, tag_name('p'))
+	if p is None: raise Exception('no p found')
 	if x.hasAttribute('filename'):
 		yield E('h1', None, [
-			E('a', [('href', '/' + x.getAttribute('filename'))], map(clone, query_xml(x, tag_name('h1')).childNodes)),
+			E('a',
+				[('href', '/' + x.getAttribute('filename'))],
+				map(clone, h1)
+			),
 		])
-		yield from map(clone, query_xml(x, tag_name('p')).childNodes)
+		yield from map(clone, p)
 	else: return map(clone, x.childNodes)
 
 def frontpage_template(posts: List[xml.Node]) -> xml.Node:
@@ -168,10 +171,10 @@ def frontpage_template(posts: List[xml.Node]) -> xml.Node:
 	return HTML(CONF['lang'], HEAD(CONF['sitename']),
 		E('body', None, [
 			E('header', None, [
-				aimg(CONF['icon'], '/', 'icon'),
+				AIMG(CONF['icon'], '/', 'icon'),
 				E('h1', None, [
 					CONF['sitename'],
-					aimg('/pics/feed-icon.svg', '/rss.xml', 'rss'),
+					AIMG('/pics/feed-icon.svg', '/rss.xml', 'rss'),
 				]),
 				E('nav', [('id', 'links')], CONF['links']),
 				CONF['blurb'],
@@ -191,7 +194,11 @@ def rss_template(posts: List[xml.Node]) -> xml.Node:
 	return E('rss', [('version', '2.0')], [
 		E('channel', None, CONF['sitename']),
 		E('link', None, CONF['url']),
-		E('atom:link', [('href', os.path.join(CONF['sitename'], 'rss.xml')), ('rel', 'self'), ('type', 'application/rss+xml')], None),
+		E('atom:link',
+			[('href', os.path.join(CONF['sitename'], 'rss.xml')),
+			('rel', 'self'),
+			('type', 'application/rss+xml')],
+			None),
 		E('description', None, CONF['sitename']),
 		E('pubDate', None, inner_text(query_xml(first(posts), tag_name('pubDate')))),
 		E('language', None, CONF['lang']),
@@ -203,7 +210,11 @@ def render_rss_item(x: xml.Node) -> xml.Node:
 	xguid = guid(int(x.getAttribute('timestamp')))
 	xurl = os.path.join(CONF['url'], '#' + xguid)
 	return E('item', None, [
-		E('title', None, [ maybe(query_xml(x, tag_name('h1')), inner_text, K('New post by %s (%s)' % (CONF['author'], xguid))) ]),
+		E('title', None, [
+			maybe(query_xml(x, tag_name('h1')),
+				inner_text,
+				K('New post by %s (%s)' % (CONF['author'], xguid)))
+		]),
 		E('guid', None, [ xurl ]),
 		E('pubDate', None, [ rfctime(int(x.getAttribute('timestamp'))) ]),
 		E('link', None, [ xurl ]),
