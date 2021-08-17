@@ -1,189 +1,245 @@
 #!/usr/bin/env python3
-import sys, os, time, json, string, re
-from typing import Iterable, Union, Tuple, List, Optional, TextIO
 
-os.chdir(os.path.dirname(sys.argv[0]))
+import sys, os, time, string
+import xml.dom.minidom as xml
+from typing import TypeVar, List, Sequence, Callable, Any, Optional, Iterable, Tuple, Union
 
-CONF = json.loads(open('config').read())
+T = TypeVar('T')
+Document: xml.Node = xml.Document()
+CONF: dict = dict()
+
 DIGITS: str = string.digits + string.ascii_letters + '-_'
-CATS: List[str] = []
-
-#types
-Item = Tuple[int, str, str]
-Prop = Tuple[str, str]
-Elem = Tuple[str, Optional[Iterable[Prop]], Optional[Iterable[Union[str, 'Elem']]]] # type: ignore
-
-def main(pathname: str, args: list) -> None:
-	if len(args) > 0 and args[0] == '-s': return make_single()
-
-	global CATS
-	posts: List[Item] = list(reversed(sorted(map(parse, item_stream(read(pathname))), key=first)))
-	CATS = sorted(list(set(x[1] for x in posts)))
-
-	write('index.html', render_index(posts))
-	write('rss.xml', render_rss(posts))
-
-def intersperse(s, xs: Iterable):
-	i = iter(xs)
-	yield i.__next__()
-	for x in i:
-		yield s
-		yield x
-
-def make_single():
-	data: str = sys.stdin.read(-1)
-	match = re.search('<h1>(.+?)</h1>', data)
-	if match is None:
-		raise Exception('No title found. Are you sure it has an h1 element?')
-	title: str = match.group(1)
-	print('<!DOCTYPE html>', serialise(page(title, data)))
-
-def write(f: str, x: str) -> None:
-	if not x[1]: return
-	with open('render/'+f, 'w') as p:
-		print('Making \033[1m\033[92m%s\033[0m' % (f,))
-		p.write(x)
-
-def render_index(posts: Iterable[Item]) -> str:
-	def render_item(item: Item) -> Elem:
-		return ('article', [ ('id', guid(item[0])), ('t', item[1]) ], [
-			('time', None, [ ymd(item[0]) ]),
-			item[2],
-		])
-
-	tree: Elem = html(CONF['lang'], head(CONF['title']),
-		('body', None, [
-			('header', None, [
-				imglink(href='/', src='/pics/ruri_thinking_icon.jpg', alt='icon'),
-				('h1', None, [
-					CONF['title'],
-					' ',
-					imglink(href='/rss.xml', src='/pics/feed-icon.svg', alt='rss')
-				]),
-				('nav', [('id', 'links')], intersperse(' ', map(lambda x: ('a', [('href', CONF['links'][x])], [x]), CONF['links']))),
-				('p', None, [ CONF['about'] ]),
-			]),
-			('main', None, [
-				('nav', [('id', 'cats')], [
-					('a', [('href', 'all'), ('class', 'active')], 'all'),
-					*intersperse(' ', (('a', [('href', x)], x) for x in CATS)),
-				]),
-				*(render_item(x) for x in posts),
-			]),
-			('script', [('src', '/script.js')], ' '),
-		]))
-	return '<!DOCTYPE html>'+serialise(tree)
-
-def render_rss(xs: List[Item]) -> str:
-	def render_item_rss(item: Item) -> Elem:
-		g: str = guid(item[0])
-		return ('item', None, [
-			('title', None, [ 'New post on %s (%s)' % (CONF['sitename'], g) ]),
-			('guid', [ ('isPermaLink', 'false') ], [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
-			('pubDate', None, [ rfctime(item[0]) ]),
-			('description', None, [ escape(absolute_links(item[2])) ]),
-			('link', None, [ 'https://%s.neocities.org/#%s' % (CONF['sitename'], g) ]),
-		])
-
-	tree: Elem = ('rss', [
-			('version', '2.0'),
-			('xmlns:atom', 'http://www.w3.org/2005/Atom')
-		], [
-			('channel', None, [
-				('title', None, [CONF['title']]),
-				('link', None, ['https://%s.neocities.org' % (CONF['sitename'],)]),
-				('atom:link', (
-					('href', 'https://%s.neocities.org/rss.xml' % (CONF['sitename'],)),
-					('rel', 'self'),
-					('type', 'application/rss+xml')),
-					None),
-				('description', None, [CONF['title']]),
-				('pubDate', None, [rfctime(xs[0][0])]),
-				('language', None, [CONF['lang']]),
-				('ttl', None, ['1440']),
-				*(render_item_rss(x) for x in xs)
-			]),
-		])
-	return '<?xml version="1.0" encoding="UTF-8"?>'+serialise(tree)
-
-def imglink(href: str, src: str, alt: Optional[str]) -> Elem:
-	imgprops: List[Prop] = [ ('src', src) ]
-	if alt is not None: imgprops.append(('alt', alt))
-	return ('a', [('href', href)], [ ('img', imgprops, None) ])
-
-def html(lang: str, head: Elem, body: Elem) -> Elem:
-	return ('html', [('lang', lang)], [head, body])
-
-def head(title: str) -> Elem:
-	return ('head', None, [
-		('meta', [ ('charset', 'utf-8') ], None),
-		('meta', [ ('name', 'viewport'), ('content', 'width=device-width, initial-scale=1.0') ], None),
-		('meta', [ ('name', 'url'), ('content', 'https://%s.neocities.org' % (CONF['sitename'],)) ], None),
-		('meta', [ ('name', 'author'), ('content', CONF['author']) ], None),
-		('meta', [ ('name', 'description'), ('content', CONF['title']) ], None),
-		('link', [ ('rel', 'stylesheet'), ('href', '/style.css') ], None),
-		('link', [ ('rel', 'icon'), ('href', '/favicon.ico?v=2') ], None),
-		('link', [ ('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml') ], None),
-		('title', None, [ title ]),
-	])
-
-def page(title: str, body: str) -> Elem:
-	now = int(time.time())
-	return html(CONF['lang'], head(title),
-		('body', None, [
-			('header', None, [
-				('a', [('href', '/')], 'Home'),
-				' — ',
-				('time', None, ymd(now))
-			]),
-			('main', None, body)
-		]))
-
-def escape(x: str) -> str:
-	for i in (('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;')):
-		x = x.replace(*i)
-	return x
-
 def int_to_base(x: int, base: int) -> str:
 	if x == 0: return DIGITS[0]
 	xs: List[str] = []
 	while x:
 		x, mod = divmod(x, base)
 		xs.append(DIGITS[mod])
-	return emptyjoin(reversed(xs))
+	return ''.join(reversed(xs))
 
-def absolute_links(x: str) -> str:
-	for i in ('href', 'src'):
-		x = x.replace(
-			'%s="/' % (i,),
-			'%s="https://%s.neocities.org/' % (i, CONF["sitename"]))
-	return x
-
-def serialise(x: Union[str, Elem]) -> str:
-	if isinstance(x, str): return x
-	xs: List[str] = ['<', x[0]]
-	if x[1] is not None:
-		xs.extend(' %s="%s"' % (x[0], x[1]) for x in x[1])
-	if x[2] is not None:
-		tmp = [serialise(x) for x in x[2]]
-		if len(tmp) != 0:
-			xs.append('>')
-			xs.extend(tmp)
-			xs.extend(['</', x[0], '>'])
-	else:
-		xs.append('/>')
-	return emptyjoin(xs)
-
-def parse(x: str) -> Item:
-	p: List[str] = x.strip().split('\n', 2)
-	return (int(p[0]), p[1], p[2])
-
-def item_stream(fp: TextIO) -> Iterable[str]: return fp.read(-1).strip().split('\n\n')
-def guid(x: int) -> str: return int_to_base((x-1483228800)//60, len(DIGITS))
 def ymd(x: int) -> str: return time.strftime('%Y-%m-%d', time.gmtime(x))
 def rfctime(x: int) -> str: return time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(x))
-def emptyjoin(x: Iterable) -> str: return ''.join(x)
-def read(x: str) -> TextIO: return open(x, 'r')
-def first(x): return x[0]
+def guid(x: int) -> str: return int_to_base((x-1483228800)//60, len(DIGITS))
+def element_node(x: xml.Node) -> bool: return x.nodeType == xml.Node.ELEMENT_NODE
+def text_node(x: xml.Node) -> bool: return x.nodeType == xml.Node.TEXT_NODE
+def first(x: Sequence[T]) -> T: return x[0]
+def tail(x: Sequence[T]) -> Sequence[T]: return x[1:]
+def clone(x: xml.Node) -> xml.Node: return x.cloneNode(deep=True)
+def K(a: T) -> Callable[[Any], T]: return lambda b: a
+def tag_name(a: str) -> Callable[[xml.Node], bool]:
+	return lambda b: element_node(b) and b.tagName == a
 
-if __name__ == '__main__': main('posts', sys.argv[1:])
+def intersperse(item: Any, xs: Iterable) -> Iterable:
+	it = iter(xs)
+	yield it.__next__()
+	for x in it:
+		yield item
+		yield x
+
+def inner_text(x: xml.Node) -> str:
+	text = []
+	for n in x.childNodes:
+		if text_node(n): text.append(n.data)
+		elif element_node(n):
+			for t in inner_text(n): text.append(t)
+	return ''.join(text)
+
+def maybe(x: Optional[T], good: Callable[[T], Any], bad: Callable[[None], Any]) -> Any:
+	return bad(x) if x is None else good(x)
+
+def HTML(lang: str, head: xml.Node, body: xml.Node) -> xml.Node:
+	return E('html', [('lang', lang)], [head, body])
+
+def HEAD(title: str) -> xml.Node:
+	return E('head', None, [
+		E('meta', [('charset', 'utf8')], None),
+		E('meta', [('name', 'viewport'), ('value', 'width=device-width, initial-scale=1.0')], None),
+		E('meta', [('name', 'url'), ('value', CONF['url'])], None),
+		E('meta', [('name', 'author'), ('value', CONF['author'])], None),
+		E('meta', [('name', 'description'), ('value', CONF['sitename'])], None),
+		E('link', [('rel', 'stylesheet'), ('href', '/style.css')], None),
+		E('link', [('rel', 'icon'), ('href', '/favicon.ico')], None),
+		E('link', [('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml')], None),
+		E('title', None, [title]),
+	])
+
+def E(
+	name: str,
+	attrs: Optional[Iterable[Tuple[str, str]]],
+	children: Optional[Iterable[Union[xml.Node, str]]]
+) -> xml.Node:
+	x: xml.Node = Document.createElement(name)
+	if attrs:
+		for key, value in attrs: x.setAttribute(key, value)
+	if children:
+		for child in children:
+			if isinstance(child, xml.Node): x.appendChild(child)
+			elif isinstance(child, str): x.appendChild(Document.createTextNode(child))
+	return x
+
+def AIMG(src: str, href: str, alt: Optional[str] = None) -> xml.Node:
+	img_attrs = [('src', src)]
+	if alt: img_attrs.append(('alt', alt))
+	return E('a', [('href', href)], [E('img', img_attrs, None)])
+
+def find(f: Callable[[T], bool], xs: Iterable[T]) -> Optional[T]:
+	for x in xs:
+		if f(x): return x
+	return None
+
+def query_xml(doc: xml.Node, *fs: Callable[[xml.Node], bool]) -> Optional[xml.Node]:
+	x = doc
+	for f in fs:
+		if x is None: return x
+		x = find(f, x.childNodes)
+	return x
+
+def query_xml_all(x: xml.Node, *fs: Callable[[xml.Node], bool]) -> Iterable[xml.Node]:
+	if len(fs) == 0:
+		yield x
+	else:
+		cs: Iterable[xml.Node] = filter(first(fs), x.childNodes)
+		for c in cs:
+			yield from query_xml_all(c, *tail(fs))
+
+def walk_node_tree(tree: xml.Node) -> Iterable[xml.Node]:
+	yield tree
+	for x in tree.childNodes: yield from walk_node_tree(x)
+
+def main():
+	if sys.stdin.isatty(): render_posts()
+	else: create_post()
+
+def create_post():
+	doc = xml.parse('site.xml')
+	posts = query_xml(doc, tag_name('site'), tag_name('posts'))
+	posts.appendChild(query_xml(xml.parseString(sys.stdin.read()), tag_name('post')))
+	write('site.xml', doc.toxml())
+
+def render_posts():
+	def html_final(x: xml.Node) -> str: return '<!DOCTYPE html>' + x.toxml()
+	def rss_final(x: xml.Node) -> str: return '<?xml version="1.0" encoding="UTF-8"?>' + x.toxml()
+	def not_skip(x: xml.Node) -> bool: return not x.hasAttribute('skip')
+
+	global CONF
+	site = query_xml(xml.parse('site.xml'), tag_name('site'))
+	for x in filter(element_node, site.childNodes):
+		if x.tagName in ['icon', 'sitename', 'lang', 'url', 'author']: f = inner_text
+		elif x.tagName == 'links': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
+		elif x.tagName == 'blurb': f = lambda x: list(map(clone, x.childNodes))
+		elif x.tagName == 'posts':
+			posts = sorted(
+				query_xml_all(x, tag_name('post')),
+				key=lambda x: int(x.getAttribute('timestamp')))
+			continue
+		CONF[x.tagName] = f(x)
+
+	write('render/index.html', html_final(frontpage_template(list(map(render_item, filter(not_skip, posts))))))
+	write('render/rss.xml', rss_final(rss_template(list(map(render_rss_item, filter(not_skip, posts))))))
+
+	for x in posts:
+		if not x.hasAttribute('filename'): continue
+		write(
+			os.path.join('render', x.getAttribute('filename')),
+			html_final(render_post(x)))
+
+def render_post(x: xml.Node) -> xml.Node:
+	h1 = find(tag_name('h1'), walk_node_tree(x))
+	if h1 is None: raise Exception('no h1 found')
+	timestamp = int(x.getAttribute('timestamp'))
+	return HTML(CONF['lang'],
+		HEAD(inner_text(h1)),
+		E('body', None, [
+			E('header', None, [
+				E('a', [('href', '/')], ['Home']),
+				' — ',
+				E('time', None, [ymd(timestamp)]),
+			]),
+			E('main', None, map(clone, x.childNodes)),
+		]))
+
+def render_item(x: xml.Node) -> xml.Node:
+	return E('article', [
+		('id', guid(int(x.getAttribute('timestamp')))),
+		('t', x.getAttribute('tag')),
+	], description(x))
+
+def description(x: xml.Node) -> Iterable[xml.Node]:
+	yield E('time', None, ymd(int(x.getAttribute('timestamp'))))
+	if x.hasAttribute('filename'):
+		h1 = find(tag_name('h1'), walk_node_tree(x))
+		if h1 is None: raise Exception('no h1 found')
+		p = query_xml(x, tag_name('p'))
+		if p is None: raise Exception('no p found')
+		yield E('h1', None, [
+			E('a',
+				[('href', '/' + x.getAttribute('filename'))],
+				map(clone, h1.childNodes)
+			),
+		])
+		yield from map(clone, p.childNodes)
+	else: yield from map(clone, x.childNodes)
+
+def frontpage_template(posts: List[xml.Node]) -> xml.Node:
+	distinct_tags: List[str] = sorted(set((x.getAttribute('t') for x in posts)))
+	return HTML(CONF['lang'], HEAD(CONF['sitename']),
+		E('body', None, [
+			E('header', None, [
+				AIMG(CONF['icon'], '/', 'icon'),
+				E('h1', None, [
+					CONF['sitename'],
+					' ',
+					AIMG('/pics/feed-icon.svg', '/rss.xml', 'rss'),
+				]),
+				E('nav', [('id', 'links')], intersperse(' ', CONF['links'])),
+				E('p', None, CONF['blurb']),
+			]),
+			E('main', None, [
+				E('nav', [('id', 'cats')], [
+					E('a', [('class', 'active'), ('href', 'all')], ['all']),
+					*intersperse(' ', (E('a', [('href', x)], [x]) for x in distinct_tags)),
+				]),
+				*reversed(posts)
+			]),
+			E('script', [('src', '/script.js')], [''])
+		])
+	)
+
+def rss_template(posts: List[xml.Node]) -> xml.Node:
+	return E('rss', [('version', '2.0')], [
+		E('channel', None, CONF['sitename']),
+		E('link', None, CONF['url']),
+		E('atom:link',
+			[('href', os.path.join(CONF['sitename'], 'rss.xml')),
+			('rel', 'self'),
+			('type', 'application/rss+xml')],
+			None),
+		E('description', None, CONF['sitename']),
+		E('pubDate', None, inner_text(query_xml(first(posts), tag_name('pubDate')))),
+		E('language', None, CONF['lang']),
+		E('ttl', None, ['1440']),
+		*posts
+	])
+
+def render_rss_item(x: xml.Node) -> xml.Node:
+	xguid = guid(int(x.getAttribute('timestamp')))
+	xurl = os.path.join(CONF['url'], '#' + xguid)
+	return E('item', None, [
+		E('title', None, [
+			maybe(query_xml(x, tag_name('h1')),
+				inner_text,
+				K('New post by %s (%s)' % (CONF['author'], xguid)))
+		]),
+		E('guid', None, [ xurl ]),
+		E('pubDate', None, [ rfctime(int(x.getAttribute('timestamp'))) ]),
+		E('link', None, [ xurl ]),
+		E('description', None, description(x)),
+	])
+
+def write(pathname: str, contents: str):
+	print('writing', pathname)
+	fp = open(pathname, 'w')
+	fp.write(contents)
+	fp.close()
+
+main()
