@@ -29,6 +29,13 @@ def K(a: T) -> Callable[[Any], T]: return lambda b: a
 def tag_name(a: str) -> Callable[[xml.Node], bool]:
 	return lambda b: element_node(b) and b.tagName == a
 
+def intersperse(item: Any, xs: Iterable) -> Iterable:
+	it = iter(xs)
+	yield it.__next__()
+	for x in it:
+		yield item
+		yield x
+
 def inner_text(x: xml.Node) -> str:
 	text = []
 	for n in x.childNodes:
@@ -112,13 +119,14 @@ def create_post():
 def render_posts():
 	def html_final(x: xml.Node) -> str: return '<!DOCTYPE html>' + x.toxml()
 	def rss_final(x: xml.Node) -> str: return '<?xml version="1.0" encoding="UTF-8"?>' + x.toxml()
+	def not_skip(x: xml.Node) -> bool: return not x.hasAttribute('skip')
 
 	global CONF
 	site = query_xml(xml.parse('site.xml'), tag_name('site'))
 	for x in filter(element_node, site.childNodes):
 		if x.tagName in ['icon', 'sitename', 'lang', 'url', 'author']: f = inner_text
 		elif x.tagName == 'links': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
-		elif x.tagName == 'blurb': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
+		elif x.tagName == 'blurb': f = lambda x: list(map(clone, x.childNodes))
 		elif x.tagName == 'posts':
 			posts = sorted(
 				query_xml_all(x, tag_name('post')),
@@ -126,8 +134,8 @@ def render_posts():
 			continue
 		CONF[x.tagName] = f(x)
 
-	write('render/index.html', html_final(frontpage_template(list(map(render_item, posts)))))
-	write('render/rss.xml', rss_final(rss_template(list(map(render_rss_item, posts)))))
+	write('render/index.html', html_final(frontpage_template(list(map(render_item, filter(not_skip, posts))))))
+	write('render/rss.xml', rss_final(rss_template(list(map(render_rss_item, filter(not_skip, posts))))))
 
 	for x in posts:
 		if not x.hasAttribute('filename'): continue
@@ -157,6 +165,7 @@ def render_item(x: xml.Node) -> xml.Node:
 	], description(x))
 
 def description(x: xml.Node) -> Iterable[xml.Node]:
+	yield E('time', None, ymd(int(x.getAttribute('timestamp'))))
 	if x.hasAttribute('filename'):
 		h1 = find(tag_name('h1'), walk_node_tree(x))
 		if h1 is None: raise Exception('no h1 found')
@@ -179,15 +188,16 @@ def frontpage_template(posts: List[xml.Node]) -> xml.Node:
 				AIMG(CONF['icon'], '/', 'icon'),
 				E('h1', None, [
 					CONF['sitename'],
+					' ',
 					AIMG('/pics/feed-icon.svg', '/rss.xml', 'rss'),
 				]),
-				E('nav', [('id', 'links')], CONF['links']),
-				CONF['blurb'],
+				E('nav', [('id', 'links')], intersperse(' ', CONF['links'])),
+				E('p', None, CONF['blurb']),
 			]),
 			E('main', None, [
 				E('nav', [('id', 'cats')], [
 					E('a', [('class', 'active'), ('href', 'all')], ['all']),
-					*(E('a', [('href', x)], [x]) for x in distinct_tags)
+					*intersperse(' ', (E('a', [('href', x)], [x]) for x in distinct_tags)),
 				]),
 				*reversed(posts)
 			]),
