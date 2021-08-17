@@ -1,4 +1,4 @@
-a { text-underline-offset: 0.25em; color: #62A; }
+a { text-underline-offset: 0.25em; color: #535; }
 a.active { color: inherit; font-weight: bold; }
 h1 { line-height: 1.5em; }
 img { display: block; max-width: 100%; }
@@ -25,9 +25,6 @@ article h1 { font-size: inherit; }
 article time { font-size: 75%; margin: 0.5em 0 0 1em; float: right; }
 header h1 img { width: 1em }
 header > a > img { width: 160px; height: 160px; border-radius: 50%; }
-html
-	{ background: url("/pics/texture.png"), linear-gradient(to top, #3d2e3b, #766173);
-	background-position: top center; }
 body
 	{ padding: 10px;
 	line-height: 1.5em;

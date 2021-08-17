@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 
-import sys, os, time, string
+import sys, os, time, string, base64
 import xml.dom.minidom as xml
 from typing import TypeVar, List, Sequence, Callable, Any, Optional, Iterable, Tuple, Union
+from mimetypes import guess_type
 
 T = TypeVar('T')
 Document: xml.Node = xml.Document()
@@ -28,6 +29,28 @@ def clone(x: xml.Node) -> xml.Node: return x.cloneNode(deep=True)
 def K(a: T) -> Callable[[Any], T]: return lambda b: a
 def tag_name(a: str) -> Callable[[xml.Node], bool]:
 	return lambda b: element_node(b) and b.tagName == a
+
+class RawText(xml.Text):
+    def writexml(self, writer, indent='', addindent='', newl=''):
+        if self.data:
+            writer.write('{}{}{}'.format(indent, self.data, newl))
+
+def createRawTextNode(data):
+	r = RawText()
+	r.data = data
+	return r
+
+def determine_mime_type(pathname: str) -> str:
+	return guess_type(pathname)[0]
+
+def data_uri(pathname: str) -> str:
+	return 'data:%s;base64,%s' % (
+		determine_mime_type(pathname),
+		base64.b64encode(open(pathname, 'rb').read()).decode('utf8'))
+
+def remove_all_attributes(x: xml.Node) -> xml.Node:
+	for a, v in x.attributes.items(): x.removeAttribute(a)
+	return x
 
 def intersperse(item: Any, xs: Iterable) -> Iterable:
 	it = iter(xs)
@@ -134,14 +157,41 @@ def render_posts():
 			continue
 		CONF[x.tagName] = f(x)
 
-	write('render/index.html', html_final(frontpage_template(list(map(render_item, filter(not_skip, posts))))))
+	write('render/index.html', html_final(inline(frontpage_template(list(map(render_item, filter(not_skip, posts)))))))
 	write('render/rss.xml', rss_final(rss_template(list(map(render_rss_item, filter(not_skip, posts))))))
 
 	for x in posts:
 		if not x.hasAttribute('filename'): continue
 		write(
 			os.path.join('render', x.getAttribute('filename')),
-			html_final(render_post(x)))
+			html_final(inline(render_post(x))))
+
+def inline(tree: xml.Node, parent: Optional[xml.Node] = None) -> xml.Node:
+	def get_pathname(node, attr):
+		pathname = node.getAttribute(attr)
+		if pathname[0] == '/': return 'render' + pathname
+		else: return 'render/' + pathname
+
+	for node in tree.childNodes:
+		if not element_node(node): continue
+		elif node.tagName == 'link' and node.hasAttribute('rel') and node.getAttribute('rel') == 'stylesheet':
+			stylesheet = open(get_pathname(node, 'href')).read()
+			remove_all_attributes(node)
+			node.tagName = 'style'
+			node.appendChild(createRawTextNode(stylesheet))
+		elif node.tagName == 'link' and node.hasAttribute('rel') and node.getAttribute('rel') == 'icon':
+			node.setAttribute('href', data_uri(get_pathname(node, 'href')))
+		elif node.tagName == 'img':
+			pathname = get_pathname(node, 'src')
+			if os.path.getsize(pathname) < 16e3:
+				node.setAttribute('src', data_uri(pathname))
+		elif node.tagName == 'script' and node.hasAttribute('src'):
+			javascript = open(get_pathname(node, 'src')).read()
+			node.removeAttribute('src')
+			node.appendChild(createRawTextNode(javascript))
+		else: inline(node, tree)
+
+	return tree
 
 def render_post(x: xml.Node) -> xml.Node:
 	h1 = find(tag_name('h1'), walk_node_tree(x))
