@@ -76,10 +76,10 @@ def HTML(lang: str, head: xml.Node, body: xml.Node) -> xml.Node:
 def HEAD(title: str) -> xml.Node:
 	return E('head', None, [
 		E('meta', [('charset', 'utf8')], None),
-		E('meta', [('name', 'viewport'), ('value', 'width=device-width, initial-scale=1.0')], None),
-		E('meta', [('name', 'url'), ('value', CONF['url'])], None),
-		E('meta', [('name', 'author'), ('value', CONF['author'])], None),
-		E('meta', [('name', 'description'), ('value', CONF['sitename'])], None),
+		E('meta', [('name', 'viewport'), ('content', 'width=device-width, initial-scale=1.0')], None),
+		E('meta', [('name', 'url'), ('content', CONF['url'])], None),
+		E('meta', [('name', 'author'), ('content', CONF['author'])], None),
+		E('meta', [('name', 'description'), ('content', CONF['sitename'])], None),
 		E('link', [('rel', 'stylesheet'), ('href', '/style.css')], None),
 		E('link', [('rel', 'icon'), ('href', '/favicon.ico')], None),
 		E('link', [('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml')], None),
