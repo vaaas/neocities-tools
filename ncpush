@@ -1,9 +1,40 @@
 #!/usr/bin/env python3
-import sys, os, json, subprocess, hashlib
+import sys, os, json, subprocess, hashlib, re
+import xml.dom.minidom as xml
 from getpass import getpass
-from typing import Set, List, Any, Iterable, Tuple, Union
+from typing import Set, List, Any, Iterable, Tuple, Union, Callable, Optional, TypeVar
 
-CONF = json.loads(open('config').read())
+T = TypeVar('T')
+
+def element_node(x: xml.Node) -> bool: return x.nodeType == xml.Node.ELEMENT_NODE
+def text_node(x: xml.Node) -> bool: return x.nodeType == xml.Node.TEXT_NODE
+
+def get_user_name(x: str) -> str:
+	return re.search('^https:\\/\\/([^\\.]+)', x).groups()[0]
+
+def inner_text(x: xml.Node) -> str:
+	text = []
+	for n in x.childNodes:
+		if text_node(n): text.append(n.data)
+		elif element_node(n):
+			for t in inner_text(n): text.append(t)
+	return ''.join(text)
+
+def query_xml(doc: xml.Node, *fs: Callable[[xml.Node], bool]) -> Optional[xml.Node]:
+	x = doc
+	for f in fs:
+		if x is None: return x
+		x = find(f, x.childNodes)
+	return x
+
+def tag_name(a: str) -> Callable[[xml.Node], bool]:
+	return lambda b: element_node(b) and b.tagName == a
+
+def find(f: Callable[[T], bool], xs: Iterable[T]) -> Optional[T]:
+	for x in xs:
+		if f(x): return x
+	return None
+
 FileSum = Tuple[str, str]
 
 def main(args: List[str]) -> int:
@@ -15,7 +46,9 @@ def main(args: List[str]) -> int:
 		else:
 			raise Exception('no valid render directory')
 
-		user: str = CONF['sitename']
+		user: str = get_user_name(
+			inner_text(
+			query_xml(xml.parse('../site.xml'), tag_name('site'), tag_name('url'))))
 		print('Sitename is', user)
 		password: str = getpass('Password: ')
 		remote: List[FileSum] = remote_files(user, password)
