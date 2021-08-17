@@ -95,6 +95,10 @@ def query_xml_all(x: xml.Node, *fs: Callable[[xml.Node], bool]) -> Iterable[xml.
 		for c in cs:
 			yield from query_xml_all(c, *tail(fs))
 
+def walk_node_tree(tree: xml.Node) -> Iterable[xml.Node]:
+	yield tree
+	for x in tree.childNodes: yield from walk_node_tree(x)
+
 def main():
 	if sys.stdin.isatty(): render_posts()
 	else: create_post()
@@ -114,7 +118,7 @@ def render_posts():
 	for x in filter(element_node, site.childNodes):
 		if x.tagName in ['icon', 'sitename', 'lang', 'url', 'author']: f = inner_text
 		elif x.tagName == 'links': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
-		elif x.tag_name == 'blurb': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
+		elif x.tagName == 'blurb': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
 		elif x.tagName == 'posts':
 			posts = sorted(
 				query_xml_all(x, tag_name('post')),
@@ -126,13 +130,14 @@ def render_posts():
 	write('render/rss.xml', rss_final(rss_template(list(map(render_rss_item, posts)))))
 
 	for x in posts:
-		if query_xml(x, tag_name('h1')) is None: continue
+		if not x.hasAttribute('filename'): continue
 		write(
 			os.path.join('render', x.getAttribute('filename')),
 			html_final(render_post(x)))
 
 def render_post(x: xml.Node) -> xml.Node:
-	h1 = query_xml(x, tag_name('h1'))
+	h1 = find(tag_name('h1'), walk_node_tree(x))
+	if h1 is None: raise Exception('no h1 found')
 	timestamp = int(x.getAttribute('timestamp'))
 	return HTML(CONF['lang'],
 		HEAD(inner_text(h1)),
@@ -152,19 +157,19 @@ def render_item(x: xml.Node) -> xml.Node:
 	], description(x))
 
 def description(x: xml.Node) -> Iterable[xml.Node]:
-	h1 = query_xml(x, tag_name('h1'))
-	if h1 is None: raise Exception('no h1 found')
-	p = query_xml(x, tag_name('p'))
-	if p is None: raise Exception('no p found')
 	if x.hasAttribute('filename'):
+		h1 = find(tag_name('h1'), walk_node_tree(x))
+		if h1 is None: raise Exception('no h1 found')
+		p = query_xml(x, tag_name('p'))
+		if p is None: raise Exception('no p found')
 		yield E('h1', None, [
 			E('a',
 				[('href', '/' + x.getAttribute('filename'))],
-				map(clone, h1)
+				map(clone, h1.childNodes)
 			),
 		])
-		yield from map(clone, p)
-	else: return map(clone, x.childNodes)
+		yield from map(clone, p.childNodes)
+	else: yield from map(clone, x.childNodes)
 
 def frontpage_template(posts: List[xml.Node]) -> xml.Node:
 	distinct_tags: List[str] = sorted(set((x.getAttribute('t') for x in posts)))
@@ -184,7 +189,7 @@ def frontpage_template(posts: List[xml.Node]) -> xml.Node:
 					E('a', [('class', 'active'), ('href', 'all')], ['all']),
 					*(E('a', [('href', x)], [x]) for x in distinct_tags)
 				]),
-				*posts
+				*reversed(posts)
 			]),
 			E('script', [('src', '/script.js')], [''])
 		])
