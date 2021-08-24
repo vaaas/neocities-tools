@@ -44,9 +44,12 @@ def determine_mime_type(pathname: str) -> str:
 	return guess_type(pathname)[0]
 
 def data_uri(pathname: str) -> str:
-	return 'data:%s;base64,%s' % (
-		determine_mime_type(pathname),
-		base64.b64encode(open(pathname, 'rb').read()).decode('utf8'))
+	mime = determine_mime_type(pathname)
+	if mime in ('text/xml'):
+		return 'data:%s,%s' % (mime, open(pathname, 'r').read())
+	else:
+		return 'data:%s;base64,%s' % (mime,
+			base64.b64encode(open(pathname, 'rb').read()).decode('utf8'))
 
 def remove_all_attributes(x: xml.Node) -> xml.Node:
 	for a, v in x.attributes.items(): x.removeAttribute(a)
@@ -183,7 +186,7 @@ def inline(tree: xml.Node, parent: Optional[xml.Node] = None) -> xml.Node:
 			node.setAttribute('href', data_uri(get_pathname(node, 'href')))
 		elif node.tagName == 'img':
 			pathname = get_pathname(node, 'src')
-			if os.path.getsize(pathname) < 16e3:
+			if os.path.getsize(pathname) < 2**15:
 				node.setAttribute('src', data_uri(pathname))
 		elif node.tagName == 'script' and node.hasAttribute('src'):
 			javascript = open(get_pathname(node, 'src')).read()
