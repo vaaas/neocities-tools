@@ -27,6 +27,8 @@ def first(x: Sequence[T]) -> T: return x[0]
 def tail(x: Sequence[T]) -> Sequence[T]: return x[1:]
 def clone(x: xml.Node) -> xml.Node: return x.cloneNode(deep=True)
 def K(a: T) -> Callable[[Any], T]: return lambda b: a
+def no_slash(x: str) -> str: return tail(x) if first(x) == '/' else x
+
 def tag_name(a: str) -> Callable[[xml.Node], bool]:
 	return lambda b: element_node(b) and b.tagName == a
 
@@ -149,6 +151,8 @@ def render_posts():
 
 	global CONF
 	site = query_xml(xml.parse('site.xml'), tag_name('site'))
+	posts = []
+	pages = []
 	for x in filter(element_node, site.childNodes):
 		if x.tagName in ['icon', 'sitename', 'lang', 'url', 'author']: f = inner_text
 		elif x.tagName == 'links': f = lambda x: list(map(clone, query_xml_all(x, tag_name('a'))))
@@ -158,6 +162,8 @@ def render_posts():
 				query_xml_all(x, tag_name('post')),
 				key=lambda x: int(x.getAttribute('timestamp')))
 			continue
+		elif x.tagName == 'pages':
+			pages = query_xml_all(x, tag_name('page'))
 		CONF[x.tagName] = f(x)
 
 	write('render/index.html', html_final(inline(frontpage_template(list(map(render_item, filter(not_skip, posts)))))))
@@ -169,11 +175,14 @@ def render_posts():
 			os.path.join('render', x.getAttribute('filename')),
 			html_final(inline(render_post(x))))
 
+	for x in pages:
+		if not x.hasAttribute('filename'): continue
+		write(
+			os.path.join('render', x.getAttribute('filename')),
+			html_final(inline(render_page(x))))
+
 def inline(tree: xml.Node, parent: Optional[xml.Node] = None) -> xml.Node:
-	def get_pathname(node, attr):
-		pathname = node.getAttribute(attr)
-		if pathname[0] == '/': return 'render' + pathname
-		else: return 'render/' + pathname
+	def get_pathname(node, attr): return os.path.join('render', no_slash(node.getAttribute(attr)))
 
 	for node in tree.childNodes:
 		if not element_node(node): continue
@@ -210,6 +219,22 @@ def render_post(x: xml.Node) -> xml.Node:
 			]),
 			E('main', None, map(clone, x.childNodes)),
 		]))
+
+def render_page(x: xml.Node) -> xml.Node:
+	head = query_xml(x, tag_name('head'))
+	body = query_xml(x, tag_name('body'))
+	return HTML(CONF['lang'],
+		E('head', None, [
+			E('meta', [('charset', 'utf8')], None),
+			E('meta', [('name', 'viewport'), ('content', 'width=device-width, initial-scale=1.0')], None),
+			E('meta', [('name', 'url'), ('content', CONF['url'])], None),
+			E('meta', [('name', 'author'), ('content', CONF['author'])], None),
+			E('meta', [('name', 'description'), ('content', CONF['sitename'])], None),
+			E('link', [('rel', 'icon'), ('href', '/favicon.ico')], None),
+			E('link', [('rel', 'alternate'), ('href', '/rss.xml'), ('type', 'application/rss+xml')], None),
+			*head.childNodes,
+		]),
+		body)
 
 def render_item(x: xml.Node) -> xml.Node:
 	return E('article', [
@@ -259,19 +284,21 @@ def frontpage_template(posts: List[xml.Node]) -> xml.Node:
 	)
 
 def rss_template(posts: List[xml.Node]) -> xml.Node:
-	return E('rss', [('version', '2.0')], [
-		E('channel', None, CONF['sitename']),
-		E('link', None, CONF['url']),
-		E('atom:link',
-			[('href', os.path.join(CONF['sitename'], 'rss.xml')),
-			('rel', 'self'),
-			('type', 'application/rss+xml')],
-			None),
-		E('description', None, CONF['sitename']),
-		E('pubDate', None, inner_text(query_xml(first(posts), tag_name('pubDate')))),
-		E('language', None, CONF['lang']),
-		E('ttl', None, ['1440']),
-		*posts
+	return E('rss', [('version', '2.0'), ('xmlns:atom', 'http://www.w3.org/2005/Atom')], [
+		E('channel', None, [
+			E('title', None, CONF['sitename']),
+			E('link', None, CONF['url']),
+			E('atom:link',
+				[('href', os.path.join(CONF['url'], 'rss.xml')),
+				('rel', 'self'),
+				('type', 'application/rss+xml')],
+				None),
+			E('description', None, CONF['sitename']),
+			E('pubDate', None, inner_text(query_xml(first(posts), tag_name('pubDate')))),
+			E('language', None, CONF['lang']),
+			E('ttl', None, ['1440']),
+			*reversed(posts)
+		]),
 	])
 
 def render_rss_item(x: xml.Node) -> xml.Node:
@@ -286,7 +313,7 @@ def render_rss_item(x: xml.Node) -> xml.Node:
 		E('guid', None, [ xurl ]),
 		E('pubDate', None, [ rfctime(int(x.getAttribute('timestamp'))) ]),
 		E('link', None, [ xurl ]),
-		E('description', None, description(x)),
+		E('description', None, (absolute_links(x).toxml() for x in description(x))),
 	])
 
 def write(pathname: str, contents: str):
@@ -294,5 +321,14 @@ def write(pathname: str, contents: str):
 	fp = open(pathname, 'w')
 	fp.write(contents)
 	fp.close()
+
+def absolute_links(x: xml.Node) -> xml.Node:
+	if element_node(x):
+		for a in ('href', 'src'):
+			if x.hasAttribute(a) and not x.getAttribute(a).startswith('http'):
+				x.setAttribute(a, os.path.join(CONF['url'], no_slash(x.getAttribute(a))))
+		for c in x.childNodes:
+			absolute_links(c)
+	return x
 
 main()
