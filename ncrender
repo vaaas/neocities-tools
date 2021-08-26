@@ -306,7 +306,7 @@ def render_rss_item(x: xml.Node) -> xml.Node:
 	xurl = os.path.join(CONF['url'], '#' + xguid)
 	return E('item', None, [
 		E('title', None, [
-			maybe(query_xml(x, tag_name('h1')),
+			maybe(find(tag_name('h1'), walk_node_tree(x)),
 				inner_text,
 				K('New post by %s (%s)' % (CONF['author'], xguid)))
 		]),
