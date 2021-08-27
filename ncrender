@@ -4,6 +4,7 @@ import sys, os, time, string, base64
 import xml.dom.minidom as xml
 from typing import TypeVar, List, Sequence, Callable, Any, Optional, Iterable, Tuple, Union
 from mimetypes import guess_type
+from urllib.parse import quote
 
 T = TypeVar('T')
 Document: xml.Node = xml.Document()
@@ -33,9 +34,9 @@ def tag_name(a: str) -> Callable[[xml.Node], bool]:
 	return lambda b: element_node(b) and b.tagName == a
 
 class RawText(xml.Text):
-    def writexml(self, writer, indent='', addindent='', newl=''):
-        if self.data:
-            writer.write('{}{}{}'.format(indent, self.data, newl))
+	def writexml(self, writer, indent='', addindent='', newl=''):
+		if self.data:
+			writer.write('{}{}{}'.format(indent, self.data, newl))
 
 def createRawTextNode(data):
 	r = RawText()
@@ -45,13 +46,9 @@ def createRawTextNode(data):
 def determine_mime_type(pathname: str) -> str:
 	return guess_type(pathname)[0]
 
-def data_uri(pathname: str) -> str:
-	mime = determine_mime_type(pathname)
-	if mime in ('text/xml'):
-		return 'data:%s,%s' % (mime, open(pathname, 'r').read())
-	else:
-		return 'data:%s;base64,%s' % (mime,
-			base64.b64encode(open(pathname, 'rb').read()).decode('utf8'))
+def data_uri(pathname: str, mime: Optional[str] = None) -> str:
+	if mime is None: mime = determine_mime_type(pathname)
+	return 'data:%s;base64,%s' % (mime, base64.b64encode(open(pathname, 'rb').read()).decode('utf8'))
 
 def remove_all_attributes(x: xml.Node) -> xml.Node:
 	for a, v in x.attributes.items(): x.removeAttribute(a)
@@ -196,7 +193,9 @@ def inline(tree: xml.Node, parent: Optional[xml.Node] = None) -> xml.Node:
 		elif node.tagName == 'img':
 			pathname = get_pathname(node, 'src')
 			if os.path.getsize(pathname) < 2**15:
-				node.setAttribute('src', data_uri(pathname))
+				mime = determine_mime_type(pathname)
+				if mime == 'image/svg+xml': tree.replaceChild(xml.parse(pathname).childNodes[0], node)
+				else: node.setAttribute('src', data_uri(pathname, mime))
 		elif node.tagName == 'script' and node.hasAttribute('src'):
 			javascript = open(get_pathname(node, 'src')).read()
 			node.removeAttribute('src')
