@@ -210,9 +210,9 @@ def render_post(x: xml.Node) -> xml.Node:
 	timestamp = int(x.getAttribute('timestamp'))
 	return HTML(CONF['lang'],
 		HEAD(inner_text(h1)),
-		E('body', None, [
+		E('body', [('class', 'post')], [
 			E('header', None, [
-				E('a', [('href', '/')], ['Home']),
+				E('a', [('href', '/')], [CONF['sitename']]),
 				' — ',
 				E('time', None, [ymd(timestamp)]),
 			]),
@@ -222,6 +222,7 @@ def render_post(x: xml.Node) -> xml.Node:
 def render_page(x: xml.Node) -> xml.Node:
 	head = query_xml(x, tag_name('head'))
 	body = query_xml(x, tag_name('body'))
+	body.setAttribute('class', 'page')
 	return HTML(CONF['lang'],
 		E('head', None, [
 			E('meta', [('charset', 'utf8')], None),
@@ -262,22 +263,18 @@ def frontpage_template(posts: List[xml.Node]) -> xml.Node:
 	return HTML(CONF['lang'], HEAD(CONF['sitename']),
 		E('body', None, [
 			E('header', None, [
-				AIMG(CONF['icon'], '/', 'icon'),
-				E('h1', None, [
-					CONF['sitename'],
-					' ',
-					AIMG('/pics/feed-icon.svg', '/rss.xml', 'rss'),
+				E('div', [('class', 'imgtxt')], [
+					E('img', [('src', '/pics/banner.jpg')], None),
+					E('h1', None, [ CONF['sitename'] ]),
 				]),
-				E('nav', [('id', 'links')], intersperse(' ', CONF['links'])),
 				E('p', None, CONF['blurb']),
 			]),
-			E('main', None, [
-				E('nav', [('id', 'cats')], [
-					E('a', [('class', 'active'), ('href', 'all')], ['all']),
-					*intersperse(' ', (E('a', [('href', x)], [x]) for x in distinct_tags)),
-				]),
-				*reversed(posts)
-			]),
+			E('nav', None, intersperse(' ', [
+				*CONF['links'],
+				E('a', [('class', 'active'), ('href', 'all')], ['all']),
+				*(E('a', [('href', x)], [x]) for x in distinct_tags)
+			])),
+			E('main', None, reversed(posts)),
 			E('script', [('src', '/script.js')], [''])
 		])
 	)
